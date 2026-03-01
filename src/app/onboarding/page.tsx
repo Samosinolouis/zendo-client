@@ -33,7 +33,7 @@ import {
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type Step = "role" | "profile" | "billing" | "business" | "submitting";
+type Step = "role" | "profile" | "billing" | "preferences" | "business" | "submitting";
 
 interface ProfileForm {
   firstName: string;
@@ -50,6 +50,11 @@ interface BillingForm {
   state: string;
   postalCode: string;
   country: string;
+}
+
+interface PreferencesForm {
+  notificationsEnabled: boolean;
+  notificationMethod: "EMAIL" | "SMS";
 }
 
 interface BusinessForm {
@@ -94,6 +99,11 @@ export default function OnboardingPage() {
     country: "",
   });
 
+  const [preferences, setPreferences] = useState<PreferencesForm>({
+    notificationsEnabled: true,
+    notificationMethod: "EMAIL",
+  });
+
   const [business, setBusiness] = useState<BusinessForm>({
     name: "",
     description: "",
@@ -108,6 +118,11 @@ export default function OnboardingPage() {
 
   const updateBusiness = (field: keyof BusinessForm, value: string) =>
     setBusiness((prev) => ({ ...prev, [field]: value }));
+
+  const updatePreferences = <K extends keyof PreferencesForm>(
+    field: K,
+    value: PreferencesForm[K]
+  ) => setPreferences((prev) => ({ ...prev, [field]: value }));
 
   // --- Pre-check: redirect if already onboarded ---
   const checkOnboardingStatus = useCallback(async () => {
@@ -181,6 +196,10 @@ export default function OnboardingPage() {
           profilePictureUrl: profile.profilePictureUrl.trim(),
         }),
       },
+      userPreference: {
+        notificationsEnabled: preferences.notificationsEnabled,
+        notificationMethod: preferences.notificationMethod,
+      },
       billingAddress: {
         addressLine1: billing.addressLine1.trim(),
         country: billing.country.trim(),
@@ -206,6 +225,7 @@ export default function OnboardingPage() {
         user: GqlUser;
         billingAddress: BillingAddress;
         business: Business | null;
+        userPreference: { id: string; notificationsEnabled: boolean; notificationMethod: string };
       };
     }>(PROCESS_ONBOARDING, { input });
 
@@ -231,6 +251,7 @@ export default function OnboardingPage() {
   const canProceedBilling =
     billing.addressLine1.trim().length > 0 && billing.country.trim().length > 0;
   const canProceedBusiness = !wantsBusiness || business.name.trim().length > 0;
+  const canProceedPreferences = preferences.notificationMethod === "EMAIL" || preferences.notificationMethod === "SMS";
 
   // --- Loading states ---
   if (status === "loading" || checking) {
@@ -249,6 +270,7 @@ export default function OnboardingPage() {
     { key: "role", label: "Role", icon: User },
     { key: "profile", label: "Profile", icon: User },
     { key: "billing", label: "Address", icon: MapPin },
+    { key: "preferences", label: "Preferences", icon: Sparkles },
     ...(wantsBusiness
       ? [{ key: "business", label: "Business", icon: Building2 }]
       : []),
@@ -647,6 +669,117 @@ export default function OnboardingPage() {
 
                 <button
                   disabled={!canProceedBilling}
+                  onClick={() => setStep("preferences")}
+                  className="w-full flex items-center justify-center gap-2 py-3 mt-2 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25"
+                >
+                  Continue <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP: Preferences ── */}
+          {step === "preferences" && (
+            <div className="animate-slide-up">
+              <button
+                onClick={() => setStep("billing")}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors group"
+              >
+                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+                Back
+              </button>
+
+              <div className="flex items-center gap-3 mb-7">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Notification Preferences
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    How should we keep you informed?
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                {/* Notifications enabled toggle */}
+                <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 bg-gray-50/50">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Enable notifications</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Receive updates about your appointments and activity.</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={preferences.notificationsEnabled}
+                    onClick={() =>
+                      updatePreferences("notificationsEnabled", !preferences.notificationsEnabled)
+                    }
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${
+                      preferences.notificationsEnabled ? "bg-blue-600" : "bg-gray-200"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform ${
+                        preferences.notificationsEnabled ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Notification method */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">
+                    Notification method <span className="text-red-400">*</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => updatePreferences("notificationMethod", "EMAIL")}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                        preferences.notificationMethod === "EMAIL"
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <span className="text-lg">✉️</span>
+                      <span
+                        className={`text-sm font-semibold ${
+                          preferences.notificationMethod === "EMAIL"
+                            ? "text-blue-700"
+                            : "text-gray-700"
+                        }`}
+                      >
+                        Email
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updatePreferences("notificationMethod", "SMS")}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                        preferences.notificationMethod === "SMS"
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <span className="text-lg">💬</span>
+                      <span
+                        className={`text-sm font-semibold ${
+                          preferences.notificationMethod === "SMS"
+                            ? "text-blue-700"
+                            : "text-gray-700"
+                        }`}
+                      >
+                        SMS
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  disabled={!canProceedPreferences}
                   onClick={() =>
                     wantsBusiness ? setStep("business") : handleSubmit()
                   }
@@ -670,7 +803,7 @@ export default function OnboardingPage() {
           {step === "business" && (
             <div className="animate-slide-up">
               <button
-                onClick={() => setStep("billing")}
+                onClick={() => setStep("preferences")}
                 className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors group"
               >
                 <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
