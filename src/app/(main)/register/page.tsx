@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
 import { Eye, EyeOff, Mail, Lock, User, Building2, ArrowRight, ArrowLeft, Check, Sparkles, Users, Briefcase, Chrome, Facebook, Twitter } from "lucide-react";
 
@@ -125,9 +126,9 @@ export default function RegisterPage() {
                 <h2 className="text-3xl font-bold text-gray-900">Create your account</h2>
                 <p className="text-gray-500 mt-2">
                   Already have an account?{" "}
-                  <Link href="/login" className="text-blue-600 font-medium hover:text-blue-700 transition-colors">
+                  <button onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })} className="text-blue-600 font-medium hover:text-blue-700 transition-colors">
                     Sign in
-                  </Link>
+                  </button>
                 </p>
               </div>
 

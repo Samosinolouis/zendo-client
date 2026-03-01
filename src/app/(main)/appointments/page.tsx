@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
 import { getAppointmentsByUserId, getServiceById, getBusinessById } from "@/lib/mock-data";
 import { formatCurrency, formatDateTime, getStatusColor } from "@/lib/utils";
@@ -19,12 +20,12 @@ export default function AppointmentsPage() {
           </div>
           <h1 className="text-3xl font-bold text-white mb-3">Your Appointments</h1>
           <p className="text-white/60 mb-8 text-lg">Sign in to view and manage your bookings.</p>
-          <Link
-            href="/login"
+          <button
+            onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
             className="inline-flex items-center gap-2 px-6 py-3 bg-white text-blue-700 font-semibold rounded-xl hover:shadow-lg hover:shadow-white/20 transition-all hover:-translate-y-0.5"
           >
             Sign in to continue <ArrowRight className="w-4 h-4" />
-          </Link>
+          </button>
         </div>
       </div>
     );

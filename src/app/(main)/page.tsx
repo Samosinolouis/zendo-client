@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
 import { mockBusinesses, mockServices } from "@/lib/mock-data";
 import { ArrowRight, Star, CalendarCheck, ShieldCheck, Sparkles, Search, Zap, Clock, CheckCircle2, TrendingUp, Users2 } from "lucide-react";
@@ -345,10 +346,10 @@ export default function HomePage() {
               <ArrowRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
             </Link>
             {!isLoggedIn && (
-              <Link href="/login"
+              <button onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
                 className="inline-flex items-center gap-2 px-8 py-4 border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/10 transition-all text-base">
                 Sign in instead
-              </Link>
+              </button>
             )}
           </div>
         </div>

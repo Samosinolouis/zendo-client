@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
 import { getNotificationsByUserId } from "@/lib/mock-data";
 import { formatDateTime } from "@/lib/utils";
@@ -38,12 +39,12 @@ export default function NotificationsPage() {
           </div>
           <h1 className="text-3xl font-bold text-white mb-3">Notifications</h1>
           <p className="text-white/60 mb-8 text-lg">Sign in to see your notifications.</p>
-          <a
-            href="/login"
+          <button
+            onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
             className="inline-flex items-center gap-2 px-6 py-3 bg-white text-blue-700 font-semibold rounded-xl hover:shadow-lg hover:shadow-white/20 transition-all hover:-translate-y-0.5"
           >
             Sign in <ArrowRight className="w-4 h-4" />
-          </a>
+          </button>
         </div>
       </div>
     );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
+import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
 import { mockUsers } from "@/lib/mock-data";
 import {
@@ -170,18 +171,18 @@ export default function Navbar() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <Link
-                  href="/login"
+                <button
+                  onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
                   className="px-4 py-1.5 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   Sign in
-                </Link>
-                <Link
-                  href="/register"
+                </button>
+                <button
+                  onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
                   className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm shadow-blue-500/20"
                 >
                   Get started
-                </Link>
+                </button>
               </div>
             )}
           </div>
@@ -234,14 +235,14 @@ export default function Navbar() {
                 </>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <Link href="/login" onClick={() => setMobileMenuOpen(false)}
+                  <button onClick={() => { setMobileMenuOpen(false); signIn("keycloak", { callbackUrl: "/onboarding" }); }}
                     className="flex items-center justify-center px-4 py-1.5 rounded-lg text-sm font-medium text-blue-600 border border-blue-200 hover:bg-blue-50">
                     Sign in
-                  </Link>
-                  <Link href="/register" onClick={() => setMobileMenuOpen(false)}
+                  </button>
+                  <button onClick={() => { setMobileMenuOpen(false); signIn("keycloak", { callbackUrl: "/onboarding" }); }}
                     className="flex items-center justify-center px-4 py-1.5 rounded-lg text-sm font-semibold text-white bg-blue-600">
                     Get started free
-                  </Link>
+                  </button>
                 </div>
               )}
             </div>
