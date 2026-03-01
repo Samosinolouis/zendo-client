@@ -3,8 +3,104 @@
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
-import { mockBusinesses, mockServices } from "@/lib/mock-data";
-import { ArrowRight, Star, CalendarCheck, ShieldCheck, Sparkles, Search, Zap, Clock, CheckCircle2, TrendingUp, Users2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { graphqlClient } from "@/lib/graphql-client";
+import {
+  GET_FEATURED_BUSINESSES,
+  GET_FEATURED_FEEDBACKS,
+} from "@/graphql/landing";
+import type {
+  Business,
+  ServiceFeedback,
+  BusinessConnection,
+  ServiceFeedbackConnection,
+} from "@/graphql/types";
+import { ArrowRight, Star, CalendarCheck, ShieldCheck, Sparkles, Search, Zap, Clock, CheckCircle2, TrendingUp, Users2, Loader2 } from "lucide-react";
+
+/* ------------------------------------------------------------------ */
+/*  ProseMirror JSON renderer                                         */
+/* ------------------------------------------------------------------ */
+
+type PmNode = {
+  type: string;
+  text?: string;
+  content?: PmNode[];
+  attrs?: Record<string, unknown>;
+  marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
+};
+
+function renderPmNode(node: PmNode, key: string | number): React.ReactNode {
+  if (node.type === "text") {
+    let el: React.ReactNode = node.text ?? "";
+    for (const mark of node.marks ?? []) {
+      if (mark.type === "bold") el = <strong key={key}>{el}</strong>;
+      else if (mark.type === "italic") el = <em key={key}>{el}</em>;
+      else if (mark.type === "code") el = <code key={key} className="bg-gray-100 px-1 rounded text-xs">{el}</code>;
+      else if (mark.type === "link")
+        el = <a key={key} href={String(mark.attrs?.href ?? "#")} className="text-blue-600 underline">{el}</a>;
+    }
+    return el;
+  }
+
+  const children = (node.content ?? []).map((c, i) => renderPmNode(c, i));
+
+  switch (node.type) {
+    case "doc":
+      return <>{children}</>;
+    case "paragraph":
+      return <p key={key} className="mb-2 last:mb-0">{children}</p>;
+    case "heading": {
+      const level = Math.min(Number(node.attrs?.level ?? 2), 6);
+      const sizeClass = level <= 2 ? "text-base" : "text-sm";
+      return <p key={key} className={`font-bold mb-1 ${sizeClass}`}>{children}</p>;
+    }
+    case "bulletList":
+      return <ul key={key} className="list-disc list-inside mb-2">{children}</ul>;
+    case "orderedList":
+      return <ol key={key} className="list-decimal list-inside mb-2">{children}</ol>;
+    case "listItem":
+      return <li key={key}>{children}</li>;
+    case "blockquote":
+      return <blockquote key={key} className="border-l-2 border-gray-300 pl-3 italic text-gray-500">{children}</blockquote>;
+    case "hardBreak":
+      return <br key={key} />;
+    case "horizontalRule":
+      return <hr key={key} className="my-2 border-gray-200" />;
+    default:
+      return <>{children}</>;
+  }
+}
+
+function ProseMirrorContent({ payload }: { payload: unknown }) {
+  try {
+    const doc: PmNode =
+      typeof payload === "string" ? JSON.parse(payload) : (payload as PmNode);
+    return <>{renderPmNode(doc, "root")}</>;
+  } catch {
+    return <p className="text-sm text-gray-500 italic">No content.</p>;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+function renderStars(rating: number, size = "w-3.5 h-3.5") {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`${size} ${
+            i <= Math.round(rating)
+              ? "fill-amber-400 text-amber-400"
+              : "fill-gray-200 text-gray-200"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
 
 const FEATURES = [
   { icon: Search, title: "Discover Businesses", description: "Browse hundreds of verified businesses across every category imaginable.", color: "bg-blue-50 text-blue-600" },
@@ -28,8 +124,33 @@ const TESTIMONIALS = [
 
 export default function HomePage() {
   const { isLoggedIn } = useAuth();
-  const featuredBusinesses = mockBusinesses.slice(0, 3);
-  const featuredServices = mockServices.slice(0, 6);
+
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [feedbacks, setFeedbacks] = useState<ServiceFeedback[]>([]);
+  const [loadingBiz, setLoadingBiz] = useState(true);
+  const [loadingFeed, setLoadingFeed] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const res = await graphqlClient<{ businesses: BusinessConnection }>(
+        GET_FEATURED_BUSINESSES,
+        { first: 3, sort: { field: "AVERAGE_RATING_DESC" } }
+      );
+      setBusinesses(res.data?.businesses.edges.map((e) => e.node) ?? []);
+      setLoadingBiz(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const res = await graphqlClient<{ serviceFeedbacks: ServiceFeedbackConnection }>(
+        GET_FEATURED_FEEDBACKS,
+        { first: 6, sort: { field: "RATING_DESC" } }
+      );
+      setFeedbacks(res.data?.serviceFeedbacks.edges.map((e) => e.node) ?? []);
+      setLoadingFeed(false);
+    })();
+  }, []);
 
   return (
     <div className="bg-white overflow-x-hidden">
@@ -215,39 +336,76 @@ export default function HomePage() {
               See all <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {featuredBusinesses.map((biz, i) => {
-              const gradients = ["from-blue-500 to-blue-700","from-violet-500 to-purple-700","from-teal-500 to-cyan-700"];
-              return (
-                <Link key={biz.id} href={`/business/${biz.id}`} className="group block rounded-2xl border border-gray-100 overflow-hidden hover:border-blue-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-                  <div className={`h-40 bg-linear-to-br ${gradients[i % gradients.length]} relative overflow-hidden`}>
-                    <div className="absolute inset-0 opacity-20" style={{backgroundImage:"radial-gradient(circle at 30% 30%, white, transparent 60%)"}} />
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <div className="flex items-center gap-0.5 mb-1">
-                        {[1,2,3,4,5].map(j => <Star key={j} className="w-3 h-3 fill-white/80 text-white/80" />)}
-                        <span className="text-white/80 text-xs ml-1">5.0</span>
+
+          {loadingBiz ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+            </div>
+          ) : businesses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+                <Search className="w-7 h-7 text-blue-300" />
+              </div>
+              <p className="text-base font-semibold text-gray-700 mb-1">No businesses yet</p>
+              <p className="text-sm text-gray-400">Check back soon — great businesses are on their way.</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-6">
+              {businesses.map((biz, i) => {
+                const gradients = ["from-blue-500 to-blue-700","from-violet-500 to-purple-700","from-teal-500 to-cyan-700"];
+                const metric = biz.metrics;
+                const avg = metric?.averageRating ?? 0;
+                const reviews = metric?.totalReviews ?? 0;
+                const services = metric?.totalServices ?? 0;
+                return (
+                  <Link
+                    key={biz.id}
+                    href={`/business/${biz.id}`}
+                    className="group block rounded-2xl border border-gray-100 overflow-hidden hover:border-blue-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                  >
+                    <div className={`h-40 ${biz.bannerImageUrl ? "" : `bg-linear-to-br ${gradients[i % gradients.length]}`} relative overflow-hidden`}
+                      style={biz.bannerImageUrl ? { backgroundImage: `url(${biz.bannerImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : {}}>
+                      {!biz.bannerImageUrl && (
+                        <div className="absolute inset-0 opacity-20" style={{backgroundImage:"radial-gradient(circle at 30% 30%, white, transparent 60%)"}} />
+                      )}
+                      {avg > 0 && (
+                        <div className="absolute bottom-4 left-4 right-4">
+                          <div className="flex items-center gap-1">
+                            {renderStars(avg, "w-3 h-3")}
+                            <span className="text-white text-xs font-semibold drop-shadow ml-1">
+                              {avg.toFixed(1)}
+                            </span>
+                            {reviews > 0 && (
+                              <span className="text-white/70 text-xs">({reviews})</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30 flex items-center justify-center text-white font-bold text-lg">
+                        {biz.name[0]}
                       </div>
                     </div>
-                    <div className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30 flex items-center justify-center text-white font-bold">
-                      {biz.name[0]}
+                    <div className="p-5">
+                      <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{biz.name}</h3>
+                      <p className="text-sm text-gray-500 mt-1 line-clamp-2 leading-relaxed">{biz.description}</p>
+                      <div className="flex items-center justify-between mt-4">
+                        {services > 0 ? (
+                          <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">
+                            {services} service{services !== 1 ? "s" : ""}
+                          </span>
+                        ) : (
+                          <span />
+                        )}
+                        <span className="text-xs text-gray-400 group-hover:text-blue-500 flex items-center gap-1 transition-colors">
+                          View <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="p-5">
-                    <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{biz.name}</h3>
-                    <p className="text-sm text-gray-500 mt-1 line-clamp-2 leading-relaxed">{biz.description}</p>
-                    <div className="flex items-center justify-between mt-4">
-                      <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">
-                        {mockServices.filter(s => s.businessId === biz.id).length} services
-                      </span>
-                      <span className="text-xs text-gray-400 group-hover:text-blue-500 flex items-center gap-1 transition-colors">
-                        View <ArrowRight className="w-3 h-3" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
@@ -256,39 +414,84 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-10">
             <div>
-              <span className="text-blue-600 text-sm font-semibold uppercase tracking-widest">Browse services</span>
+              <span className="text-blue-600 text-sm font-semibold uppercase tracking-widest">What customers say</span>
               <h2 className="mt-2 text-3xl font-extrabold text-gray-900">Popular right now</h2>
             </div>
             <Link href="/explore" className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700 group">
               All services <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {featuredServices.map((svc) => {
-              const biz = mockBusinesses.find(b => b.id === svc.businessId);
-              return (
-                <Link key={svc.id} href={`/service/${svc.id}`} className="group bg-white rounded-2xl border border-gray-100 p-5 hover:border-blue-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors leading-snug">{svc.name}</h3>
-                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 shrink-0 mt-0.5 group-hover:translate-x-0.5 transition-all" />
-                  </div>
-                  <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed mb-4">{svc.description}</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                        {biz?.name[0]}
+
+          {loadingFeed ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+            </div>
+          ) : feedbacks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-blue-100 bg-white">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mb-4">
+                <Star className="w-7 h-7 text-amber-300" />
+              </div>
+              <p className="text-base font-semibold text-gray-700 mb-1">No reviews yet</p>
+              <p className="text-sm text-gray-400">Be the first to book a service and leave a review!</p>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {feedbacks.map((fb) => {
+                const name = fb.user
+                  ? `${fb.user.firstName} ${fb.user.lastName}`
+                  : "Anonymous";
+                const initials = fb.user
+                  ? `${fb.user.firstName[0]}${fb.user.lastName[0]}`
+                  : "?";
+                return (
+                  <Link
+                    key={fb.id}
+                    href={`/service/${fb.serviceId}`}
+                    className="group bg-white rounded-2xl border border-gray-100 p-5 hover:border-blue-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 flex flex-col"
+                  >
+                    {/* Header: stars + rating number */}
+                    <div className="flex items-center justify-between mb-3">
+                      {renderStars(fb.rating)}
+                      <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                        {fb.rating}/5
+                      </span>
+                    </div>
+
+                    {/* ProseMirror content with gradient fade */}
+                    <div className="relative flex-1 mb-4">
+                      <div className="max-h-24 overflow-hidden text-sm text-gray-600 leading-relaxed">
+                        <ProseMirrorContent payload={fb.payload} />
                       </div>
-                      <span className="text-xs text-gray-500">{biz?.name}</span>
+                      {/* Gradient fade overlay */}
+                      <div className="absolute bottom-0 left-0 right-0 h-10 bg-linear-to-t from-white to-transparent pointer-events-none" />
                     </div>
-                    <div className="flex items-center gap-0.5">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      <span className="text-xs text-gray-600 font-medium">4.9</span>
+
+                    {/* Footer: user info + link */}
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                      <div className="flex items-center gap-2">
+                        {fb.user?.profilePictureUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={fb.user.profilePictureUrl}
+                            alt={name}
+                            className="w-7 h-7 rounded-full object-cover bg-gray-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                            {initials}
+                          </div>
+                        )}
+                        <span className="text-xs text-gray-500 font-medium">{name}</span>
+                      </div>
+                      <span className="text-xs text-gray-400 group-hover:text-blue-500 flex items-center gap-1 transition-colors">
+                        View <ArrowRight className="w-3 h-3" />
+                      </span>
                     </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 

@@ -94,6 +94,8 @@ export type Business = Node & {
   description?: Maybe<Scalars['String']['output']>;
   /** Globally unique identifier */
   id: Scalars['ID']['output'];
+  /** Metrics for this business (total reviews, average rating) */
+  metrics?: Maybe<BusinessMetric>;
   /** Business name */
   name: Scalars['String']['output'];
   /** When the record was last updated */
@@ -131,6 +133,8 @@ export type BusinessFeedback = Node & {
   rating: Scalars['Int']['output'];
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+  /** The user who submitted the feedback */
+  user?: Maybe<User>;
   /** ID of the user who submitted the feedback */
   userId: Scalars['ID']['output'];
 };
@@ -181,6 +185,8 @@ export type BusinessMetric = Node & {
   id: Scalars['ID']['output'];
   /** Total number of reviews */
   totalReviews: Scalars['Int']['output'];
+  /** Total number of services */
+  totalServices: Scalars['Int']['output'];
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
 };
@@ -1517,6 +1523,8 @@ export type ServiceFeedback = Node & {
   serviceId: Scalars['ID']['output'];
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+  /** The user who submitted the feedback */
+  user?: Maybe<User>;
   /** ID of the user who submitted the feedback */
   userId: Scalars['ID']['output'];
 };
