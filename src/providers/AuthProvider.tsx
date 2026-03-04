@@ -2,49 +2,46 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { SessionProvider, useSession, signIn, signOut } from "next-auth/react";
-import type { User, Business } from "@/types";
 import type { AppUser } from "@/types/next-auth";
-import { mockUsers, getBusinessesByUserId } from "@/lib/mock-data";
+import { graphqlClient } from "@/lib/graphql-client";
+import { GET_BUSINESSES, GET_USER } from "@/graphql/queries";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-interface RegisterData {
+interface Business {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  bannerImageUrl: string | null;
+}
+
+interface AuthUser {
+  id: string;
   firstName: string;
   lastName: string;
+  middleName?: string;
+  suffix?: string;
   email: string;
-  username: string;
-  password: string;
-  role: "user" | "owner";
-  businessName?: string;
-  businessDescription?: string;
+  profilePictureUrl?: string;
+  bannerImageUrl?: string;
 }
 
 interface AuthContextType {
-  user: User | null;
-  /**
-   * The application-level user record from the backend database.
-   * `null` when the user has not yet completed onboarding.
-   */
+  user: AuthUser | null;
   appUser: AppUser | null;
   isLoggedIn: boolean;
   isOwner: boolean;
   businesses: Business[];
-  /** Redirect to Keycloak login */
   login: () => void;
-  /** Sign out of both NextAuth and Keycloak */
   logout: () => void;
-  /** Access token from Keycloak (JWT) */
   accessToken: string | null;
-  /** Session status: "loading" | "authenticated" | "unauthenticated" */
   status: string;
-  /** If the session has a token-refresh error */
   error: string | null;
-  // --- Legacy mock helpers (kept for dev/demo mode) ---
-  switchUser: (userId: string) => void;
-  register: (data: RegisterData) => Promise<{ success: boolean; message: string }>;
-  loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
+  refreshBusinesses: () => void;
+  refreshUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -58,9 +55,8 @@ const AuthContext = createContext<AuthContextType>({
   accessToken: null,
   status: "loading",
   error: null,
-  switchUser: () => {},
-  register: async () => ({ success: false, message: "" }),
-  loginWithCredentials: async () => ({ success: false, message: "" }),
+  refreshBusinesses: () => {},
+  refreshUser: () => {},
 });
 
 /* ------------------------------------------------------------------ */
@@ -68,102 +64,121 @@ const AuthContext = createContext<AuthContextType>({
 /* ------------------------------------------------------------------ */
 
 function AuthProviderInner({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession();
+  const { data: session, status, update: updateSession } = useSession();
 
-  // Build a User object from the Keycloak session when available
-  const [user, setUser] = useState<User | null>(null);
-  const [demoUser, setDemoUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
 
-  // The application-level user record from the backend DB
   const appUser: AppUser | null = session?.appUser ?? null;
+
+  const fetchBusinesses = useCallback(async () => {
+    // Use appUser.id if available, otherwise try from user state
+    const userId = appUser?.id || user?.id;
+    if (!userId) {
+      setBusinesses([]);
+      return;
+    }
+    try {
+      const res = await graphqlClient<{
+        businesses: { edges: Array<{ node: Business }> };
+      }>(GET_BUSINESSES, { first: 50, filter: { userId } });
+      const nodes = res.data?.businesses?.edges?.map((e) => e.node) ?? [];
+      setBusinesses(nodes);
+    } catch (err) {
+      console.error("Failed to fetch businesses:", err);
+      setBusinesses([]);
+    }
+  }, [appUser?.id, user?.id]);
+
+  const fetchUserFromAPI = useCallback(async (userId: string) => {
+    try {
+      const res = await graphqlClient<{ user: Partial<AuthUser> }>(GET_USER, { id: userId });
+      const fetched = res.data?.user;
+      if (fetched) {
+        setUser((prev) => {
+          if (!prev) return {
+            id: fetched.id ?? userId ?? "",
+            firstName: fetched.firstName ?? "",
+            lastName: fetched.lastName ?? "",
+            middleName: fetched.middleName ?? undefined,
+            suffix: fetched.suffix ?? undefined,
+            email: prev?.email ?? "",
+            profilePictureUrl: fetched.profilePictureUrl ?? undefined,
+            bannerImageUrl: fetched.bannerImageUrl ?? undefined,
+          };
+          return {
+            ...prev,
+            firstName: fetched.firstName ?? prev.firstName,
+            lastName: fetched.lastName ?? prev.lastName,
+            middleName: fetched.middleName ?? prev.middleName,
+            suffix: fetched.suffix ?? prev.suffix,
+            profilePictureUrl: fetched.profilePictureUrl ?? prev.profilePictureUrl,
+            bannerImageUrl: fetched.bannerImageUrl ?? prev.bannerImageUrl,
+          };
+        });
+      }
+    } catch (err) {
+      // ignore - keep existing user state
+    }
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
-      // Use appUser data (backend DB record) when available for richer name/avatar info.
-      // Fall back to Keycloak claims if the user is not yet onboarded.
       const nameParts = (session.user.name ?? "").split(" ");
-      const keycloakUser: User = {
+      setUser({
         id: session.user.id ?? "",
         firstName: appUser?.firstName ?? nameParts[0] ?? "",
         lastName: appUser?.lastName ?? nameParts.slice(1).join(" ") ?? "",
+        middleName: appUser?.middleName ?? undefined,
+        suffix: appUser?.suffix ?? undefined,
         email: session.user.email ?? "",
-        username: session.user.email ?? "",
         profilePictureUrl: appUser?.profilePictureUrl ?? session.user.image ?? undefined,
-        role: "user", // Backend will eventually provide this
-      };
-      setUser(keycloakUser);
-      setDemoUser(null); // Clear demo user when real session active
+      });
+
+      // Always fetch the fresh user record from the API to ensure
+      // fields like `profilePictureUrl` (Cloudinary URLs) are up-to-date.
+      if (session.user.id) {
+        fetchUserFromAPI(session.user.id);
+      }
     } else if (status === "unauthenticated") {
-      setUser(demoUser); // Fall back to demo user if set
+      setUser(null);
+      setBusinesses([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, session, appUser]);
+  }, [status, session, appUser, fetchUserFromAPI]);
 
-  const activeUser = status === "authenticated" ? user : demoUser;
-  const isLoggedIn = activeUser !== null;
-  const isOwner = activeUser?.role === "owner";
-  const businesses = activeUser ? getBusinessesByUserId(activeUser.id) : [];
+  useEffect(() => {
+    if (status === "authenticated") {
+      const userId = appUser?.id || user?.id;
+      if (userId) {
+        // Initial fetch
+        fetchBusinesses();
 
-  /* Keycloak login via NextAuth */
+        // Set up a periodic refresh every 5 minutes to catch any newly created businesses
+        // and to ensure the list doesn't become stale
+        const interval = setInterval(fetchBusinesses, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+      }
+    }
+  }, [status, appUser?.id, user?.id, fetchBusinesses]);
+
+  const isLoggedIn = status === "authenticated" && user !== null;
+  const isOwner = businesses.length > 0;
+
   const login = useCallback(() => {
     signIn("keycloak", { callbackUrl: "/onboarding" });
   }, []);
 
-  /* Keycloak + NextAuth sign-out */
   const logout = useCallback(() => {
     if (status === "authenticated") {
       signOut({ callbackUrl: "/" });
     }
-    setDemoUser(null);
   }, [status]);
-
-  /* --- Legacy / Demo helpers ---------------------------------------- */
-
-  const switchUser = useCallback((userId: string) => {
-    const target = mockUsers.find((u) => u.id === userId);
-    setDemoUser(target ?? null);
-  }, []);
-
-  const loginWithCredentials = useCallback(
-    async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
-      void password;
-      await new Promise((r) => setTimeout(r, 600));
-      const found = mockUsers.find(
-        (u) => u.email.toLowerCase() === email.toLowerCase()
-      );
-      if (found) {
-        setDemoUser(found);
-        return { success: true, message: "Welcome back!" };
-      }
-      return { success: false, message: "Invalid email or password. Try any mock user's email." };
-    },
-    []
-  );
-
-  const register = useCallback(async (data: RegisterData): Promise<{ success: boolean; message: string }> => {
-    await new Promise((r) => setTimeout(r, 800));
-    const exists = mockUsers.find((u) => u.email.toLowerCase() === data.email.toLowerCase());
-    if (exists) {
-      return { success: false, message: "An account with this email already exists." };
-    }
-    const newUser: User = {
-      id: `u${Date.now()}`,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      username: data.username,
-      profilePictureUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.firstName}`,
-      role: data.role,
-    };
-    mockUsers.push(newUser);
-    setDemoUser(newUser);
-    return { success: true, message: `Account created! Welcome to Zendo, ${data.firstName}.` };
-  }, []);
 
   return (
     <AuthContext.Provider
       value={{
-        user: activeUser,
+        user,
         appUser,
         isLoggedIn,
         isOwner,
@@ -173,9 +188,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         accessToken: (session?.accessToken as string) ?? null,
         status,
         error: (session?.error as string) ?? null,
-        switchUser,
-        register,
-        loginWithCredentials,
+        refreshBusinesses: fetchBusinesses,
+        refreshUser: () => user?.id && fetchUserFromAPI(user.id),
       }}
     >
       {children}

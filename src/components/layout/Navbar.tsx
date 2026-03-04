@@ -2,25 +2,40 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
-import { mockUsers } from "@/lib/mock-data";
 import {
-  Menu, X, Home, Search, CalendarDays, Bell, LayoutDashboard,
-  LogOut, ChevronDown, UserCircle, Settings, FlaskConical, User,
+  Menu, Home, Search, CalendarDays, Bell, LayoutDashboard,
+  LogOut, ChevronDown, UserCircle, Settings, User,
 } from "lucide-react";
+import { cn, getInitials } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 export default function Navbar() {
-  const { user, isLoggedIn, isOwner, logout, switchUser } = useAuth();
+  const { user, isLoggedIn, isOwner, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [devMenuOpen, setDevMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const devRef = useRef<HTMLDivElement>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 10);
@@ -28,25 +43,10 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", h);
   }, []);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setUserMenuOpen(false);
-      if (devRef.current && !devRef.current.contains(e.target as Node)) setDevMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const isActive = (path: string) =>
-    pathname === path
-      ? "text-blue-600 font-semibold bg-blue-50"
-      : "text-gray-600 hover:text-blue-600 hover:bg-gray-50";
-
   const navLinks = [
     { href: "/", label: "Home", icon: Home },
     { href: "/explore", label: "Explore", icon: Search },
   ];
-
   if (isLoggedIn) {
     navLinks.push({ href: "/appointments", label: "Appointments", icon: CalendarDays });
     navLinks.push({ href: "/notifications", label: "Notifications", icon: Bell });
@@ -55,218 +55,171 @@ export default function Navbar() {
 
   const handleLogout = () => {
     logout();
-    setUserMenuOpen(false);
-    setMobileMenuOpen(false);
+    setMobileOpen(false);
     router.push("/");
   };
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "bg-white/90 backdrop-blur-md shadow-sm border-b border-gray-200/80"
-          : "bg-white border-b border-gray-200"
-      }`}
+      className={cn(
+        "sticky top-0 z-50 transition-all duration-300 border-b bg-background/95 backdrop-blur-md supports-backdrop-filter:bg-background/60",
+        scrolled && "shadow-sm"
+      )}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-
-          <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-            <span className="text-lg font-black bg-linear-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent tracking-tighter">ZENDO</span>
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2.5 shrink-0">
+            <span className="text-lg font-black tracking-tighter gradient-text-blue">
+              ZENDO
+            </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-0.5 min-w-0 overflow-hidden">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-all whitespace-nowrap ${isActive(link.href)}`}
-              >
-                <link.icon className="w-4 h-4 shrink-0" />
-                {link.label}
-              </Link>
-            ))}
+          {/* Desktop nav */}
+          <nav className="hidden md:flex items-center gap-1">
+            {navLinks.map((link) => {
+              const active = pathname === link.href;
+              return (
+                <Button
+                  key={link.href}
+                  variant={active ? "secondary" : "ghost"}
+                  size="sm"
+                  asChild
+                >
+                  <Link href={link.href} className="gap-1.5">
+                    <link.icon className="size-4" />
+                    {link.label}
+                  </Link>
+                </Button>
+              );
+            })}
           </nav>
 
-          <div className="hidden md:flex items-center gap-2 shrink-0">
-            {/* Dev switcher */}
-            <div className="relative" ref={devRef}>
-              <button
-                onClick={() => setDevMenuOpen(!devMenuOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors border border-gray-200"
-                title="Switch demo user"
-              >
-                <FlaskConical className="w-3.5 h-3.5" />
-                Demo
-                <ChevronDown className="w-3 h-3" />
-              </button>
-              {devMenuOpen && (
-                <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-50">
-                  <p className="px-3 pt-1 pb-2 text-xs text-gray-400 font-semibold uppercase tracking-wide">
-                    Switch demo account
-                  </p>
-                  {mockUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => { switchUser(u.id); setDevMenuOpen(false); }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors ${u.id === user?.id ? "bg-blue-50" : ""}`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={u.profilePictureUrl || ""} alt={u.firstName} className="w-7 h-7 rounded-full bg-gray-200 shrink-0" />
-                      <div className="text-left">
-                        <p className="text-sm font-medium text-gray-900">{u.firstName} {u.lastName}</p>
-                        <p className="text-xs text-gray-400">{u.role === "owner" ? "Business Owner" : "Customer"}</p>
-                      </div>
-                      {u.id === user?.id && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
+          {/* Desktop right */}
+          <div className="hidden md:flex items-center gap-2">
             {isLoggedIn && user ? (
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border border-gray-200 hover:border-blue-200 hover:bg-blue-50/50 transition-all"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={user.profilePictureUrl || ""} alt={user.firstName} className="w-7 h-7 rounded-full bg-gray-200" />
-                  <span className="text-sm font-medium text-gray-700">{user.firstName}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
-                </button>
-                {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-50">
-                    <div className="px-4 py-2.5 border-b border-gray-100">
-                      <p className="text-sm font-semibold text-gray-900">{user.firstName} {user.lastName}</p>
-                      <p className="text-xs text-gray-400">{user.email}</p>
-                      <span className={`inline-flex mt-1.5 items-center px-2 py-0.5 rounded-full text-xs font-medium ${isOwner ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="gap-2 pl-1.5 pr-3 rounded-full border">
+                    <Avatar className="size-7">
+                      <AvatarImage src={user.profilePictureUrl ?? undefined} alt={user.firstName} />
+                      <AvatarFallback className="text-xs">{getInitials(user?.firstName, user?.lastName)}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium">{user.firstName}</span>
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-semibold">{user.firstName} {user.lastName}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                      <Badge variant="secondary" className="w-fit mt-1 text-xs">
                         {isOwner ? "Business Owner" : "Customer"}
-                      </span>
+                      </Badge>
                     </div>
-                    <Link href="/profile" onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                      <UserCircle className="w-4 h-4" /> My Profile
-                    </Link>
-                    {isOwner && (
-                      <Link href="/owner/dashboard" onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                        <LayoutDashboard className="w-4 h-4" /> Owner Dashboard
-                      </Link>
-                    )}
-                    <Link href="/profile" onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                      <Settings className="w-4 h-4" /> Settings
-                    </Link>
-                    <div className="border-t border-gray-100 mt-1 pt-1">
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors rounded-b-xl"
-                      >
-                        <LogOut className="w-4 h-4" /> Sign Out
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/profile"><UserCircle className="size-4 mr-2" /> My Profile</Link>
+                  </DropdownMenuItem>
+                  {isOwner && (
+                    <DropdownMenuItem asChild className="cursor-pointer">
+                      <Link href="/owner/dashboard"><LayoutDashboard className="size-4 mr-2" /> Owner Dashboard</Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/settings"><Settings className="size-4 mr-2" /> Settings</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
+                    <LogOut className="size-4 mr-2" /> Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
-                  className="px-4 py-1.5 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                >
+                <Button variant="ghost" size="sm" onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}>
                   Sign in
-                </button>
-                <button
-                  onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
-                  className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm shadow-blue-500/20"
-                >
+                </Button>
+                <Button size="sm" onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}>
                   Get started
-                </button>
+                </Button>
               </div>
             )}
           </div>
 
-          {/* Mobile toggle */}
-          <button
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+          {/* Mobile menu */}
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon">
+                <Menu className="size-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-80 p-0">
+              <SheetHeader className="px-4 pt-4 pb-2">
+                <SheetTitle className="text-left text-lg font-black tracking-tighter gradient-text-blue">
+                  ZENDO
+                </SheetTitle>
+              </SheetHeader>
+              <div className="flex flex-col gap-1 px-4 pb-4">
+                {navLinks.map((link) => {
+                  const active = pathname === link.href;
+                  return (
+                    <Button
+                      key={link.href}
+                      variant={active ? "secondary" : "ghost"}
+                      className="justify-start gap-2"
+                      asChild
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      <Link href={link.href}>
+                        <link.icon className="size-4" />
+                        {link.label}
+                      </Link>
+                    </Button>
+                  );
+                })}
+
+                <Separator className="my-2" />
+
+                {isLoggedIn && user ? (
+                  <>
+                    <div className="flex items-center gap-3 px-3 py-2">
+                      <Avatar className="size-9">
+                          <AvatarImage src={user.profilePictureUrl ?? undefined} />
+                          <AvatarFallback>{getInitials(user?.firstName, user?.lastName)}</AvatarFallback>
+                        </Avatar>
+                      <div>
+                        <p className="text-sm font-semibold">{user.firstName} {user.lastName}</p>
+                        <p className="text-xs text-muted-foreground">{isOwner ? "Business Owner" : "Customer"}</p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" className="justify-start gap-2" asChild onClick={() => setMobileOpen(false)}>
+                      <Link href="/profile"><User className="size-4" /> Profile</Link>
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-2" asChild onClick={() => setMobileOpen(false)}>
+                      <Link href="/settings"><Settings className="size-4" /> Settings</Link>
+                    </Button>
+                    <Button variant="ghost" className="justify-start gap-2 text-destructive hover:text-destructive" onClick={handleLogout}>
+                      <LogOut className="size-4" /> Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <Button variant="outline" onClick={() => { setMobileOpen(false); signIn("keycloak", { callbackUrl: "/onboarding" }); }}>
+                      Sign in
+                    </Button>
+                    <Button onClick={() => { setMobileOpen(false); signIn("keycloak", { callbackUrl: "/onboarding" }); }}>
+                      Get started free
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
-
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white">
-          <nav className="px-4 py-3 space-y-0.5">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive(link.href)}`}
-              >
-                <link.icon className="w-4 h-4" />
-                {link.label}
-              </Link>
-            ))}
-
-            <div className="border-t border-gray-100 pt-3 mt-2">
-              {isLoggedIn && user ? (
-                <>
-                  <div className="flex items-center gap-3 px-3 py-2 mb-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={user.profilePictureUrl || ""} alt="" className="w-9 h-9 rounded-full" />
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{user.firstName} {user.lastName}</p>
-                      <p className="text-xs text-gray-400">{user.role === "owner" ? "Business Owner" : "Customer"}</p>
-                    </div>
-                  </div>
-                  <Link href="/profile" onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-                    <User className="w-4 h-4" /> Profile
-                  </Link>
-                  <button onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-red-600 hover:bg-red-50">
-                    <LogOut className="w-4 h-4" /> Sign Out
-                  </button>
-                </>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <button onClick={() => { setMobileMenuOpen(false); signIn("keycloak", { callbackUrl: "/onboarding" }); }}
-                    className="flex items-center justify-center px-4 py-1.5 rounded-lg text-sm font-medium text-blue-600 border border-blue-200 hover:bg-blue-50">
-                    Sign in
-                  </button>
-                  <button onClick={() => { setMobileMenuOpen(false); signIn("keycloak", { callbackUrl: "/onboarding" }); }}
-                    className="flex items-center justify-center px-4 py-1.5 rounded-lg text-sm font-semibold text-white bg-blue-600">
-                    Get started free
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-100 pt-3 mt-2">
-              <p className="px-3 text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Demo accounts</p>
-              {mockUsers.map((u) => (
-                <button
-                  key={u.id}
-                  onClick={() => { switchUser(u.id); setMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 ${u.id === user?.id ? "bg-blue-50" : ""}`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={u.profilePictureUrl || ""} alt={u.firstName} className="w-8 h-8 rounded-full bg-gray-200" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-gray-900">{u.firstName} {u.lastName}</p>
-                    <p className="text-xs text-gray-400">{u.role === "owner" ? "Business Owner" : "Customer"}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </nav>
-        </div>
-      )}
     </header>
   );
 }

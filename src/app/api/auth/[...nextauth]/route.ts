@@ -64,18 +64,29 @@ async function refreshAccessToken(token: any) {
       throw refreshedTokens;
     }
 
+    const newAccessToken = refreshedTokens.access_token;
+    
+    // After token refresh, fetch fresh appUser with new token
+    let appUser = null;
+    if (token.sub) {
+      appUser = await fetchAppUser(newAccessToken, token.sub);
+    }
+
     return {
       ...token,
-      accessToken: refreshedTokens.access_token,
+      accessToken: newAccessToken,
       accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000,
       refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
       idToken: refreshedTokens.id_token,
+      appUser, // Re-fetched fresh appUser with new token
     };
   } catch (error) {
     console.error("Error refreshing access token:", error);
     return {
       ...token,
       error: "RefreshAccessTokenError",
+      // Preserve appUser even on error
+      appUser: token.appUser ?? null,
     };
   }
 }
@@ -131,6 +142,7 @@ const handler = NextAuth({
       }
 
       // Access token has expired, try to refresh it
+      // refreshAccessToken now actively re-fetches appUser with the new token
       return refreshAccessToken(token);
     },
     async session({ session, token }) {

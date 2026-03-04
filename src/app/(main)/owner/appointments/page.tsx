@@ -1,86 +1,155 @@
 "use client";
 
+import { useMemo } from "react";
 import { useAuth } from "@/providers/AuthProvider";
+import { useQuery, extractNodes } from "@/graphql/hooks";
+import { GET_SERVICES, GET_SERVICE_APPOINTMENTS, GET_USER } from "@/graphql/queries";
+import type { Service, ServiceAppointment, User, Connection } from "@/types";
+import { formatCurrency, formatDateTime, getStatusColor, getInitials } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  getBusinessesByUserId,
-  getServicesByBusinessId,
-  getAppointmentsByServiceId,
-  getServiceById,
-  getUserById,
-} from "@/lib/mock-data";
-import { formatCurrency, formatDateTime, getStatusColor } from "@/lib/utils";
-import { CalendarDays } from "lucide-react";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { CalendarCheck, Clock } from "lucide-react";
 
-export default function OwnerAppointmentsPage() {
-  const { user } = useAuth();
-  if (!user) return null;
+function aptStatus(apt: ServiceAppointment): string {
+  const p = apt.payload as Record<string, unknown> | null;
+  return (p?.status as string) ?? "pending";
+}
+function aptScheduledAt(apt: ServiceAppointment): string | null {
+  const p = apt.payload as Record<string, unknown> | null;
+  return (p?.scheduledAt as string) ?? null;
+}
 
-  const businesses = getBusinessesByUserId(user.id);
-  const allServices = businesses.flatMap((b) => getServicesByBusinessId(b.id));
-  const allAppointments = allServices
-    .flatMap((s) => getAppointmentsByServiceId(s.id))
-    .sort((a, b) => {
-      if (!a.scheduledAt || !b.scheduledAt) return 0;
-      return new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime();
-    });
-
+/** Renders customer info — lazy-loads user by id */
+function CustomerCell({ userId }: { userId?: string }) {
+  const { data } = useQuery<{ user: User }>(GET_USER, { id: userId! }, { skip: !userId });
+  const customer = data?.user ?? null;
   return (
-    <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">All Appointments</h2>
-        <p className="text-gray-500 mt-1 text-sm">
-          Appointments across all your businesses and services.
+    <div className="flex items-center gap-3">
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={customer?.profilePictureUrl ?? undefined} />
+        <AvatarFallback className="text-xs">
+          {customer ? getInitials(customer.firstName, customer.lastName) : "?"}
+        </AvatarFallback>
+      </Avatar>
+      <div>
+        <p className="text-sm font-medium text-foreground">
+          {customer ? `${customer.firstName} ${customer.lastName}` : "Guest"}
         </p>
       </div>
+    </div>
+  );
+}
 
-      {allAppointments.length === 0 ? (
-        <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-100">
-          <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900">No appointments yet</h3>
+export default function OwnerAppointmentsPage() {
+  const { user, businesses } = useAuth();
+
+  const bizIds = useMemo(() => businesses.map((b) => b.id), [businesses]);
+
+  // Fetch services for name lookup
+  const { data: svcData } = useQuery<{ services: Connection<Service> }>(
+    GET_SERVICES, { first: 200 }, { skip: !user }
+  );
+  const allServicesRaw = extractNodes(svcData?.services);
+  const ownerServices = useMemo(
+    () => allServicesRaw.filter((s) => bizIds.includes(s.businessId)),
+    [allServicesRaw, bizIds]
+  );
+  const svcMap = useMemo(() => {
+    const m: Record<string, Service> = {};
+    for (const s of ownerServices) m[s.id] = s;
+    return m;
+  }, [ownerServices]);
+
+  const serviceIds = useMemo(() => ownerServices.map((s) => s.id), [ownerServices]);
+
+  // Fetch all appointments, then filter to owner's services
+  const { data: aptData, loading } = useQuery<{ serviceAppointments: Connection<ServiceAppointment> }>(
+    GET_SERVICE_APPOINTMENTS, { first: 500 }, { skip: serviceIds.length === 0 }
+  );
+  const allAppointments = useMemo(() => {
+    const all = extractNodes(aptData?.serviceAppointments);
+    return all.filter((a) => serviceIds.includes(a.serviceId));
+  }, [aptData, serviceIds]);
+
+  if (!user) return null;
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Appointments</h1>
+        <p className="text-muted-foreground mt-1">All bookings across your businesses</p>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 rounded-xl" />
+          ))}
         </div>
+      ) : allAppointments.length === 0 ? (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <CalendarCheck className="w-12 h-12 text-muted-foreground/40 mb-4" />
+            <p className="text-lg font-medium text-foreground mb-1">No appointments yet</p>
+            <p className="text-sm text-muted-foreground">Bookings will appear here once customers start booking.</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="py-3 text-left font-medium text-gray-500">Service</th>
-                <th className="py-3 text-left font-medium text-gray-500">Customer</th>
-                <th className="py-3 text-left font-medium text-gray-500">Date</th>
-                <th className="py-3 text-left font-medium text-gray-500">Amount</th>
-                <th className="py-3 text-left font-medium text-gray-500">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {allAppointments.map((apt) => {
-                const service = getServiceById(apt.serviceId);
-                const customer = apt.userId ? getUserById(apt.userId) : null;
-                return (
-                  <tr key={apt.id} className="hover:bg-gray-50">
-                    <td className="py-3">
-                      <p className="font-medium text-gray-900">{service?.name ?? "—"}</p>
-                    </td>
-                    <td className="py-3 text-gray-600">
-                      {customer ? `${customer.firstName} ${customer.lastName}` : "—"}
-                    </td>
-                    <td className="py-3 text-gray-600">
-                      {apt.scheduledAt ? formatDateTime(apt.scheduledAt) : "—"}
-                    </td>
-                    <td className="py-3 font-medium text-gray-900">
-                      {formatCurrency(apt.amount, apt.currency)}
-                    </td>
-                    <td className="py-3">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(apt.status)}`}
-                      >
-                        {apt.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Scheduled</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allAppointments.map((apt) => {
+                  const svc = svcMap[apt.serviceId];
+                  const status = aptStatus(apt);
+                  const scheduled = aptScheduledAt(apt);
+                  return (
+                    <TableRow key={apt.id}>
+                      <TableCell>
+                        <CustomerCell userId={apt.userId} />
+                      </TableCell>
+                      <TableCell className="text-sm">{svc?.name ?? "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <Clock className="w-3.5 h-3.5" />
+                          {scheduled ? formatDateTime(scheduled) : "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold text-sm">
+                        {formatCurrency(apt.amount, apt.currency)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={`capitalize text-xs ${getStatusColor(status)}`}>
+                          {status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
       )}
     </div>
   );
