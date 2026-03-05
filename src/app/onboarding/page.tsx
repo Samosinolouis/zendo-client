@@ -111,12 +111,26 @@ function OnboardingContent() {
         graphqlClient<{ billingAddresses: BillingAddressConnection }>(GET_BILLING_ADDRESSES, { first: 1, filter: { userId } }),
         graphqlClient<{ businesses: BusinessConnection }>(GET_BUSINESSES, { first: 1, filter: { userId } }),
       ]);
-      const hasUser = !!userRes.data?.user;
-      const hasBilling = (billingRes.data?.billingAddresses?.edges?.length ?? 0) > 0;
+
+      // --- onboarding is *not* considered finished simply because a profile
+      //     or a billing address already exists. the previous implementation
+      //     redirected as soon as *any* record was found, which meant that a
+      //     customer who tried to become a business owner after creating a
+      //     profile was immediately bounced to "/" before the business form
+      //     ever rendered. the server never got the `business` payload, so the
+      //     user remained a "regular" account.
+      //
+      //     only the presence of a business entry should trigger the redirect.
       const hasBusiness = (businessRes.data?.businesses?.edges?.length ?? 0) > 0;
-      if (hasUser || hasBilling || hasBusiness) { router.replace(redirectTo); return; }
-    } catch (err) { console.error("Failed to check onboarding status:", err); }
-    finally { setChecking(false); }
+      if (hasBusiness) {
+        router.replace(redirectTo);
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to check onboarding status:", err);
+    } finally {
+      setChecking(false);
+    }
   }, [status, accessToken, router, redirectTo]);
 
   useEffect(() => {
