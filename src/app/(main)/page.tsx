@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
-import { mockBusinesses, mockServices } from "@/lib/mock-data";
 import { ArrowRight, Star, CalendarCheck, ShieldCheck, Sparkles, Search, Zap, Clock, CheckCircle2, TrendingUp, Users2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 const FEATURES = [
   { icon: Search, title: "Discover Businesses", description: "Browse hundreds of verified businesses across every category imaginable.", color: "text-primary bg-primary/10" },
@@ -29,8 +30,6 @@ const TESTIMONIALS = [
 
 export default function HomePage() {
   const { isLoggedIn } = useAuth();
-  const featuredBusinesses = mockBusinesses.slice(0, 3);
-  const featuredServices = mockServices.slice(0, 6);
 
   return (
     <div className="bg-background overflow-x-hidden">
@@ -200,99 +199,6 @@ export default function HomePage() {
                 </CardContent>
               </Card>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Featured Businesses ── */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-10">
-            <div>
-              <Badge variant="secondary" className="mb-2">Top picks</Badge>
-              <h2 className="text-3xl font-extrabold">Featured businesses</h2>
-            </div>
-            <Button variant="link" asChild>
-              <Link href="/explore">
-                See all <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {featuredBusinesses.map((biz, i) => {
-              const gradients = ["from-blue-500 to-blue-700","from-violet-500 to-purple-700","from-teal-500 to-cyan-700"];
-              return (
-                <Link key={biz.id} href={`/business/${biz.id}`} className="group block rounded-2xl border border-gray-100 overflow-hidden hover:border-blue-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-                  <div className={`h-40 bg-linear-to-br ${gradients[i % gradients.length]} relative overflow-hidden`}>
-                    <div className="absolute inset-0 opacity-20" style={{backgroundImage:"radial-gradient(circle at 30% 30%, white, transparent 60%)"}} />
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <div className="flex items-center gap-0.5 mb-1">
-                        {[1,2,3,4,5].map(j => <Star key={j} className="w-3 h-3 fill-white/80 text-white/80" />)}
-                        <span className="text-white/80 text-xs ml-1">5.0</span>
-                      </div>
-                    </div>
-                    <div className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30 flex items-center justify-center text-white font-bold">
-                      {biz.name[0]}
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{biz.name}</h3>
-                    <p className="text-sm text-gray-500 mt-1 line-clamp-2 leading-relaxed">{biz.description}</p>
-                    <div className="flex items-center justify-between mt-4">
-                      <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">
-                        {mockServices.filter(s => s.businessId === biz.id).length} services
-                      </span>
-                      <span className="text-xs text-gray-400 group-hover:text-blue-500 flex items-center gap-1 transition-colors">
-                        View <ArrowRight className="w-3 h-3" />
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Popular Services ── */}
-      <section className="py-20 bg-muted/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-10">
-            <div>
-              <span className="text-blue-600 text-sm font-semibold uppercase tracking-widest">Browse services</span>
-              <h2 className="mt-2 text-3xl font-extrabold text-gray-900">Popular right now</h2>
-            </div>
-            <Button variant="link" asChild>
-              <Link href="/explore">
-                All services <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {featuredServices.map((svc) => {
-              const biz = mockBusinesses.find(b => b.id === svc.businessId);
-              return (
-                <Link key={svc.id} href={`/service/${svc.id}`} className="group bg-white rounded-2xl border border-gray-100 p-5 hover:border-blue-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors leading-snug">{svc.name}</h3>
-                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 shrink-0 mt-0.5 group-hover:translate-x-0.5 transition-all" />
-                  </div>
-                  <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed mb-4">{svc.description}</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                        {biz?.name[0]}
-                      </div>
-                      <span className="text-xs text-gray-500">{biz?.name}</span>
-                    </div>
-                    <div className="flex items-center gap-0.5">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      <span className="text-xs text-gray-600 font-medium">4.9</span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
           </div>
         </div>
       </section>

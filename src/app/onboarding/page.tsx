@@ -170,7 +170,6 @@ function OnboardingContent() {
   const canProceedProfile = profile.firstName.trim().length > 0 && profile.lastName.trim().length > 0;
   const canProceedBilling = billing.addressLine1.trim().length > 0 && billing.country.trim().length > 0;
   const canProceedBusiness = !wantsBusiness || business.name.trim().length > 0;
-  const canProceedPreferences = preferences.notificationMethod === "EMAIL" || preferences.notificationMethod === "SMS";
 
   if (status === "loading" || checking) {
     return (

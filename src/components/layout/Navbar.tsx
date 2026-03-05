@@ -150,7 +150,7 @@ export default function Navbar() {
                   className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm shadow-blue-500/20"
                 >
                   Get started
-                </Button>
+                </button>
               </div>
             )}
           </div>
