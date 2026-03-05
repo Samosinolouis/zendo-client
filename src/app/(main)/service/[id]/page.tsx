@@ -64,7 +64,9 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const { data: pageData } = useQuery<{ servicePageByService: ServicePage | null }>(
     GET_SERVICE_PAGE, { serviceId: id }
   );
-  const sections = (pageData?.servicePageByService?.payload as { sections?: { heading: string; body: string }[] })?.sections ?? [];
+  const blogPayload = pageData?.servicePageByService?.payload as { title?: string; blocks?: Array<{ type: string; content: string; metadata?: Record<string, unknown> }> } | null;
+  const blogBlocks = blogPayload?.blocks ?? [];
+  const blogTitle = blogPayload?.title ?? "";
 
   const { data: fbData } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
     GET_SERVICE_FEEDBACKS, { first: 100, filter: { serviceId: id } }
@@ -238,16 +240,44 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                   </CardContent>
                 </Card>
 
-                {sections.length > 0 && sections.map((section, i) => (
+                {blogTitle && (
+                  <Card>
+                    <CardContent className="p-6">
+                      <h2 className="text-3xl font-bold mb-4">{blogTitle}</h2>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {blogBlocks.length > 0 && blogBlocks.map((block, i) => (
                   <Card key={i}>
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <ChevronRight className="w-5 h-5 text-blue-600" />
-                        {section.heading}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <p className="text-muted-foreground leading-relaxed">{section.body}</p>
+                    <CardContent className="p-6">
+                      {block.type === "heading" && (
+                        <h3 className="text-2xl font-bold text-foreground mb-2">{block.content}</h3>
+                      )}
+                      {block.type === "text" && (
+                        <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{block.content}</p>
+                      )}
+                      {block.type === "image" && block.content && (
+                        <img src={block.content} alt={block.metadata?.alt as string || "blog image"} className="rounded-lg w-full h-auto" />
+                      )}
+                      {block.type === "quote" && (
+                        <blockquote className="border-l-4 border-blue-600 pl-4 italic text-muted-foreground">{block.content}</blockquote>
+                      )}
+                      {block.type === "code" && (
+                        <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
+                          <code>{block.content}</code>
+                        </pre>
+                      )}
+                      {block.type === "video" && block.content && (
+                        <iframe
+                          width="100%"
+                          height="400"
+                          src={block.content}
+                          title="Video"
+                          allowFullScreen
+                          className="rounded-lg"
+                        />
+                      )}
                     </CardContent>
                   </Card>
                 ))}

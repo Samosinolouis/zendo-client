@@ -68,8 +68,8 @@ export default function HomePage() {
                   </Link>
                 </Button>
                 {!isLoggedIn && (
-                  <Button variant="outline" size="lg" className="border-white/30 text-white hover:bg-white/10 backdrop-blur-sm h-12 px-7 text-base" asChild>
-                    <Link href="/register">Get started free</Link>
+                  <Button variant="outline" size="lg" className="bg-transparent border-white/30 text-white hover:bg-white/10 backdrop-blur-sm h-12 px-7 text-base" onClick={() => window.location.href = "http://localhost:8080/realms/zendo/login-actions/registration?execution=1a887457-5356-48e3-b0d4-e88189223a59&client_id=zendo-app&tab_id=cQWI1K3ZLbI&client_data=eyJydSI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMC9hcGkvYXV0aC9jYWxsYmFjay9rZXljbG9hayIsInJ0IjoiY29kZSIsInN0IjoiclNMYkNWTlVvdHhtYjJubGd5YkN5MVl4OGphYXJkcnlhdkd2WHdmRmxvayJ9"}>
+                    Get started free
                   </Button>
                 )}
               </div>
@@ -252,14 +252,21 @@ export default function HomePage() {
             Join thousands of customers and businesses already using Zendo. No credit card required.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
-            <Button size="lg" className="h-12 px-8 shadow-2xl shadow-primary/30 text-base" asChild>
-              <Link href={isLoggedIn ? "/explore" : "/register"}>
-                {isLoggedIn ? "Explore businesses" : "Create free account"}
+            {isLoggedIn ? (
+              <Button size="lg" className="h-12 px-8 shadow-2xl shadow-primary/30 text-base" asChild>
+                <Link href="/explore">
+                  Explore businesses
+                  <ArrowRight className="size-5" />
+                </Link>
+              </Button>
+            ) : (
+              <Button size="lg" className="h-12 px-8 shadow-2xl shadow-primary/30 text-base" onClick={() => window.location.href = "http://localhost:8080/realms/zendo/login-actions/registration?execution=1a887457-5356-48e3-b0d4-e88189223a59&client_id=zendo-app&tab_id=cQWI1K3ZLbI&client_data=eyJydSI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMC9hcGkvYXV0aC9jYWxsYmFjay9rZXljbG9hayIsInJ0IjoiY29kZSIsInN0IjoiclNMYkNWTlVvdHhtYjJubGd5YkN5MVl4OGphYXJkcnlhdkd2WHdmRmxvayJ9"}>
+                Create free account
                 <ArrowRight className="size-5" />
-              </Link>
-            </Button>
+              </Button>
+            )}
             {!isLoggedIn && (
-              <Button variant="outline" size="lg" className="h-12 px-8 border-white/30 text-white hover:bg-white/10 text-base" onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}>
+              <Button variant="outline" size="lg" className="bg-transparent h-12 px-8 border-white/30 text-white hover:bg-white/10 text-base" onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}>
                 Sign in instead
               </Button>
             )}

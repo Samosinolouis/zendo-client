@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -143,6 +144,10 @@ function OnboardingContent() {
         ...(billing.state.trim() && { state: billing.state.trim() }),
         ...(billing.postalCode.trim() && { postalCode: billing.postalCode.trim() }),
       },
+      userPreference: {
+        notificationsEnabled: true,
+        notificationMethod: "EMAIL",
+      },
     };
     if (wantsBusiness && business.name.trim()) {
       input.business = { name: business.name.trim(), ...(business.description.trim() && { description: business.description.trim() }), ...(business.bannerImageUrl.trim() && { bannerImageUrl: business.bannerImageUrl.trim() }) };
@@ -157,12 +162,39 @@ function OnboardingContent() {
     }>(PROCESS_ONBOARDING, { input });
 
     setLoading(false);
+
+    // Handle structured errors from graphqlClient
     if (res.errors?.length) {
       const gqlErr = res.errors[0];
+
+      // Network-level failures (fetch failed)
+      if (gqlErr.extensions?.type === "network") {
+        setError("Network error: unable to reach the server. Please check your connection and try again.");
+        setStep("profile");
+        return;
+      }
+
+      // Conflict / already exists — refresh session and continue
+      const code = gqlErr.extensions?.code ?? gqlErr.extensions?.details?.code ?? undefined;
+      const status = gqlErr.extensions?.status ?? (gqlErr.extensions?.details as any)?.status;
+      if (code === "ALREADY_EXISTS" || status === 409) {
+        try {
+          await updateSession();
+        } catch (e) {
+          console.warn("Failed to refresh session after ALREADY_EXISTS", e);
+        }
+        router.replace(redirectTo);
+        return;
+      }
+
+      // Fallback: show GraphQL error message
       const fieldName = gqlErr.extensions?.details?.field as string | undefined;
       setError(fieldName ? `${gqlErr.message} (${fieldName})` : gqlErr.message);
-      setStep("profile"); return;
+      setStep("profile");
+      return;
     }
+
+    // Success
     await updateSession();
     router.replace(redirectTo);
   };
@@ -304,8 +336,15 @@ function OnboardingContent() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="profilePictureUrl">Profile picture URL</Label>
-                  <Input id="profilePictureUrl" type="url" value={profile.profilePictureUrl} onChange={(e) => updateProfile("profilePictureUrl", e.target.value)} placeholder="https://example.com/avatar.jpg" />
+                  <Label>Profile picture</Label>
+                  <ImageUpload
+                    value={profile.profilePictureUrl}
+                    onChange={(url) => updateProfile("profilePictureUrl", url)}
+                    onRemove={() => updateProfile("profilePictureUrl", "")}
+                    aspect="square"
+                    folder="users"
+                    label="Upload your profile picture"
+                  />
                 </div>
                 <Button disabled={!canProceedProfile} onClick={() => setStep("billing")} className="w-full mt-2" size="lg">
                   Continue <ArrowRight className="w-4 h-4 ml-2" />
@@ -406,8 +445,15 @@ function OnboardingContent() {
                   <Textarea id="businessDescription" value={business.description} onChange={(e) => updateBusiness("description", e.target.value)} placeholder="Short description of your business" rows={3} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="businessBanner">Banner image URL</Label>
-                  <Input id="businessBanner" type="url" value={business.bannerImageUrl} onChange={(e) => updateBusiness("bannerImageUrl", e.target.value)} placeholder="https://example.com/banner.jpg" />
+                  <Label>Banner image</Label>
+                  <ImageUpload
+                    value={business.bannerImageUrl}
+                    onChange={(url) => updateBusiness("bannerImageUrl", url)}
+                    onRemove={() => updateBusiness("bannerImageUrl", "")}
+                    aspect="banner"
+                    folder="businesses"
+                    label="Upload your business banner"
+                  />
                 </div>
                 <Button disabled={!canProceedBusiness || loading} onClick={handleSubmit} className="w-full mt-2" size="lg">
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Complete Setup <Check className="w-4 h-4 ml-2" /></>}

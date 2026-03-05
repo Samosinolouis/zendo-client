@@ -99,7 +99,7 @@ export default function ExplorePage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search services, businesses…"
-              className="w-full pl-14 pr-14 py-6 rounded-2xl text-foreground placeholder:text-muted-foreground text-base shadow-2xl bg-white border-0 focus-visible:ring-2 focus-visible:ring-primary"
+              className="w-full pl-14 pr-14 py-6 rounded-2xl text-foreground placeholder:text-gray-500 text-base shadow-2xl bg-white border-0 focus-visible:ring-2 focus-visible:ring-primary"
             />
             {searchQuery && (
               <Button

@@ -45,12 +45,53 @@ export async function graphqlClient<T = unknown>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ query, variables }),
-  });
+  try {
+    const res = await fetch(GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, variables }),
+    });
 
-  const json: GraphQLResponse<T> = await res.json();
-  return json;
+    const text = await res.text();
+
+    // Try parse JSON body; if parsing fails, return a parse error
+    try {
+      const json: GraphQLResponse<T> = text ? JSON.parse(text) : {};
+
+      if (!res.ok) {
+        return {
+          errors: [
+            {
+              message: json && (json as any).errors ? 'GraphQL errors' : res.statusText || 'HTTP error',
+              extensions: {
+                type: 'http',
+                status: res.status,
+                details: json,
+              },
+            },
+          ],
+        };
+      }
+
+      return json;
+    } catch (err) {
+      return {
+        errors: [
+          {
+            message: 'Failed to parse response from server',
+            extensions: { type: 'parse', status: res.status, details: { body: text } },
+          },
+        ],
+      };
+    }
+  } catch (err: any) {
+    return {
+      errors: [
+        {
+          message: err?.message ?? 'Network error while contacting GraphQL endpoint',
+          extensions: { type: 'network', details: { message: err?.message } },
+        },
+      ],
+    };
+  }
 }
