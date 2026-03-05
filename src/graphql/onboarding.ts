@@ -89,6 +89,14 @@ export const PROCESS_ONBOARDING = /* GraphQL */ `
         createdAt
         updatedAt
       }
+      userPreference {
+        id
+        userId
+        notificationsEnabled
+        notificationMethod
+        createdAt
+        updatedAt
+      }
     }
   }
 `;

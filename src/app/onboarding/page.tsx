@@ -21,11 +21,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
 /* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
 type Step = "role" | "profile" | "billing" | "business" | "submitting";
 
-interface ProfileForm { firstName: string; middleName: string; lastName: string; suffix: string; profilePictureUrl: string; }
-interface BillingForm { addressLine1: string; addressLine2: string; city: string; state: string; postalCode: string; country: string; }
-interface BusinessForm { name: string; description: string; bannerImageUrl: string; }
+interface ProfileForm {
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  suffix: string;
+  profilePictureUrl: string;
+}
+
+interface BillingForm {
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
+interface BusinessForm {
+  name: string;
+  description: string;
+  bannerImageUrl: string;
+}
 
 /* ------------------------------------------------------------------ */
 export default function OnboardingPage() {
@@ -49,14 +71,34 @@ function OnboardingContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [profile, setProfile] = useState<ProfileForm>({ firstName: "", middleName: "", lastName: "", suffix: "", profilePictureUrl: "" });
-  const [billing, setBilling] = useState<BillingForm>({ addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", country: "" });
-  const [business, setBusiness] = useState<BusinessForm>({ name: "", description: "", bannerImageUrl: "" });
+  const [profile, setProfile] = useState<ProfileForm>({
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    suffix: "",
+    profilePictureUrl: "",
+  });
+
+  const [billing, setBilling] = useState<BillingForm>({
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "",
+  });
+
+  const [business, setBusiness] = useState<BusinessForm>({
+    name: "",
+    description: "",
+    bannerImageUrl: "",
+  });
 
   const updateProfile = (f: keyof ProfileForm, v: string) => setProfile((p) => ({ ...p, [f]: v }));
   const updateBilling = (f: keyof BillingForm, v: string) => setBilling((p) => ({ ...p, [f]: v }));
   const updateBusiness = (f: keyof BusinessForm, v: string) => setBusiness((p) => ({ ...p, [f]: v }));
 
+  // --- Pre-check: redirect if already onboarded ---
   const checkOnboardingStatus = useCallback(async () => {
     if (status !== "authenticated" || !accessToken) return;
     try {
@@ -84,13 +126,36 @@ function OnboardingContent() {
   const handleSubmit = async () => {
     setError(""); setLoading(true); setStep("submitting");
     const input: Record<string, unknown> = {
-      user: { firstName: profile.firstName.trim(), lastName: profile.lastName.trim(), ...(profile.middleName.trim() && { middleName: profile.middleName.trim() }), ...(profile.suffix.trim() && { suffix: profile.suffix.trim() }), ...(profile.profilePictureUrl.trim() && { profilePictureUrl: profile.profilePictureUrl.trim() }) },
-      billingAddress: { addressLine1: billing.addressLine1.trim(), country: billing.country.trim(), ...(billing.addressLine2.trim() && { addressLine2: billing.addressLine2.trim() }), ...(billing.city.trim() && { city: billing.city.trim() }), ...(billing.state.trim() && { state: billing.state.trim() }), ...(billing.postalCode.trim() && { postalCode: billing.postalCode.trim() }) },
+      user: {
+        firstName: profile.firstName.trim(),
+        lastName: profile.lastName.trim(),
+        ...(profile.middleName.trim() && { middleName: profile.middleName.trim() }),
+        ...(profile.suffix.trim() && { suffix: profile.suffix.trim() }),
+        ...(profile.profilePictureUrl.trim() && {
+          profilePictureUrl: profile.profilePictureUrl.trim(),
+        }),
+      },
+      billingAddress: {
+        addressLine1: billing.addressLine1.trim(),
+        country: billing.country.trim(),
+        ...(billing.addressLine2.trim() && { addressLine2: billing.addressLine2.trim() }),
+        ...(billing.city.trim() && { city: billing.city.trim() }),
+        ...(billing.state.trim() && { state: billing.state.trim() }),
+        ...(billing.postalCode.trim() && { postalCode: billing.postalCode.trim() }),
+      },
     };
     if (wantsBusiness && business.name.trim()) {
       input.business = { name: business.name.trim(), ...(business.description.trim() && { description: business.description.trim() }), ...(business.bannerImageUrl.trim() && { bannerImageUrl: business.bannerImageUrl.trim() }) };
     }
-    const res = await graphqlClient<{ processOnboarding: { user: GqlUser; billingAddress: BillingAddress; business: Business | null } }>(PROCESS_ONBOARDING, { input });
+
+    const res = await graphqlClient<{
+      processOnboarding: {
+        user: GqlUser;
+        billingAddress: BillingAddress;
+        business: Business | null;
+      };
+    }>(PROCESS_ONBOARDING, { input });
+
     setLoading(false);
     if (res.errors?.length) {
       const gqlErr = res.errors[0];
@@ -105,6 +170,7 @@ function OnboardingContent() {
   const canProceedProfile = profile.firstName.trim().length > 0 && profile.lastName.trim().length > 0;
   const canProceedBilling = billing.addressLine1.trim().length > 0 && billing.country.trim().length > 0;
   const canProceedBusiness = !wantsBusiness || business.name.trim().length > 0;
+  const canProceedPreferences = preferences.notificationMethod === "EMAIL" || preferences.notificationMethod === "SMS";
 
   if (status === "loading" || checking) {
     return (
@@ -121,7 +187,9 @@ function OnboardingContent() {
     { key: "role", label: "Role", icon: User },
     { key: "profile", label: "Profile", icon: User },
     { key: "billing", label: "Address", icon: MapPin },
-    ...(wantsBusiness ? [{ key: "business", label: "Business", icon: Building2 }] : []),
+    ...(wantsBusiness
+      ? [{ key: "business", label: "Business", icon: Building2 }]
+      : []),
   ] as const;
   const currentStepIdx = steps.findIndex((s) => s.key === step);
 
@@ -289,9 +357,24 @@ function OnboardingContent() {
                     <Input id="country" value={billing.country} onChange={(e) => updateBilling("country", e.target.value)} placeholder="Philippines" />
                   </div>
                 </div>
-                <Button disabled={!canProceedBilling} onClick={() => wantsBusiness ? setStep("business") : handleSubmit()} className="w-full mt-2" size="lg">
-                  {wantsBusiness ? <>Continue <ArrowRight className="w-4 h-4 ml-2" /></> : <>Complete Setup <Check className="w-4 h-4 ml-2" /></>}
-                </Button>
+
+                <button
+                  disabled={!canProceedBilling}
+                  onClick={() =>
+                    wantsBusiness ? setStep("business") : handleSubmit()
+                  }
+                  className="w-full flex items-center justify-center gap-2 py-3 mt-2 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25"
+                >
+                  {wantsBusiness ? (
+                    <>
+                      Continue <ArrowRight className="w-4 h-4" />
+                    </>
+                  ) : (
+                    <>
+                      Complete Setup <Check className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           )}
@@ -299,9 +382,14 @@ function OnboardingContent() {
           {/* STEP: Business */}
           {step === "business" && (
             <div className="animate-slide-up">
-              <Button variant="ghost" size="sm" onClick={() => setStep("billing")} className="mb-6 -ml-2">
-                <ArrowLeft className="w-4 h-4 mr-1.5" /> Back
-              </Button>
+              <button
+                onClick={() => setStep("billing")}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors group"
+              >
+                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+                Back
+              </button>
+
               <div className="flex items-center gap-3 mb-7">
                 <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-900 flex items-center justify-center"><Building2 className="w-5 h-5 text-violet-600" /></div>
                 <div>

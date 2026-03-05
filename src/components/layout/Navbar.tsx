@@ -139,10 +139,16 @@ export default function Navbar() {
               </DropdownMenu>
             ) : (
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}>
+                <button
+                  onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
+                  className="px-4 py-1.5 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
                   Sign in
-                </Button>
-                <Button size="sm" onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}>
+                </button>
+                <button
+                  onClick={() => signIn("keycloak", { callbackUrl: "/onboarding" })}
+                  className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm shadow-blue-500/20"
+                >
                   Get started
                 </Button>
               </div>

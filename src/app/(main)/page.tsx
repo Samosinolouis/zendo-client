@@ -4,17 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
-import { useQuery, extractNodes } from "@/graphql/hooks";
-import { GET_BUSINESSES, GET_SERVICES } from "@/graphql/queries";
-import type { Business, Service, Connection } from "@/types";
-import {
-  ArrowRight, Star, CalendarCheck, ShieldCheck, Sparkles,
-  Search, Zap, Clock, CheckCircle2, TrendingUp, Users2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { mockBusinesses, mockServices } from "@/lib/mock-data";
+import { ArrowRight, Star, CalendarCheck, ShieldCheck, Sparkles, Search, Zap, Clock, CheckCircle2, TrendingUp, Users2 } from "lucide-react";
 
 const FEATURES = [
   { icon: Search, title: "Discover Businesses", description: "Browse hundreds of verified businesses across every category imaginable.", color: "text-primary bg-primary/10" },
@@ -38,23 +29,8 @@ const TESTIMONIALS = [
 
 export default function HomePage() {
   const { isLoggedIn } = useAuth();
-
-  const { data: bizData, loading: bizLoading } = useQuery<{ businesses: Connection<Business> }>(
-    GET_BUSINESSES, { first: 3, sort: { field: "CREATED_AT", direction: "DESC" } }
-  );
-  const { data: svcData, loading: svcLoading } = useQuery<{ services: Connection<Service> }>(
-    GET_SERVICES, { first: 6, sort: { field: "CREATED_AT", direction: "DESC" } }
-  );
-  const { data: allBizData } = useQuery<{ businesses: Connection<Business> }>(
-    GET_BUSINESSES, { first: 50 }
-  );
-
-  const featuredBusinesses = extractNodes(bizData?.businesses);
-  const featuredServices = extractNodes(svcData?.services);
-  const allBusinesses = extractNodes(allBizData?.businesses);
-
-  const getBusinessName = (businessId: string) =>
-    allBusinesses.find(b => b.id === businessId)?.name ?? "Business";
+  const featuredBusinesses = mockBusinesses.slice(0, 3);
+  const featuredServices = mockServices.slice(0, 6);
 
   return (
     <div className="bg-background overflow-x-hidden">
@@ -243,45 +219,34 @@ export default function HomePage() {
             </Button>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {bizLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i} className="overflow-hidden py-0 gap-0">
-                  <Skeleton className="h-40 w-full rounded-b-none" />
-                  <CardContent className="p-5 space-y-3">
-                    <Skeleton className="h-5 w-2/3" />
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-1/2" />
-                  </CardContent>
-                </Card>
-              ))
-            ) : featuredBusinesses.length === 0 ? (
-              <div className="col-span-full text-center py-12 text-muted-foreground">
-                <p className="text-sm">No businesses listed yet. Be the first!</p>
-              </div>
-            ) : featuredBusinesses.map((biz, i) => {
-              const gradients = ["from-primary to-primary/80", "from-primary/90 to-primary/70", "from-primary/80 to-primary/60"];
+            {featuredBusinesses.map((biz, i) => {
+              const gradients = ["from-blue-500 to-blue-700","from-violet-500 to-purple-700","from-teal-500 to-cyan-700"];
               return (
-                <Link key={biz.id} href={`/business/${biz.id}`} className="group block">
-                  <Card className="overflow-hidden hover:border-primary/30 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 py-0 gap-0">
-                    <div className={`h-40 bg-linear-to-br ${gradients[i % gradients.length]} relative overflow-hidden`}>
-                      {biz.bannerImageUrl && (
-                        <Image src={biz.bannerImageUrl} alt={biz.name} fill className="object-cover" />
-                      )}
-                      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, white, transparent 60%)" }} />
-                      <div className="absolute top-4 right-4 size-10 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30 flex items-center justify-center text-white font-bold">
-                        {biz.name[0]}
+                <Link key={biz.id} href={`/business/${biz.id}`} className="group block rounded-2xl border border-gray-100 overflow-hidden hover:border-blue-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                  <div className={`h-40 bg-linear-to-br ${gradients[i % gradients.length]} relative overflow-hidden`}>
+                    <div className="absolute inset-0 opacity-20" style={{backgroundImage:"radial-gradient(circle at 30% 30%, white, transparent 60%)"}} />
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <div className="flex items-center gap-0.5 mb-1">
+                        {[1,2,3,4,5].map(j => <Star key={j} className="w-3 h-3 fill-white/80 text-white/80" />)}
+                        <span className="text-white/80 text-xs ml-1">5.0</span>
                       </div>
                     </div>
-                    <CardContent className="p-5">
-                      <h3 className="font-bold group-hover:text-primary transition-colors">{biz.name}</h3>
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2 leading-relaxed">{biz.description}</p>
-                      <div className="flex items-center justify-between mt-4">
-                        <span className="text-xs text-muted-foreground group-hover:text-primary flex items-center gap-1 transition-colors">
-                          View <ArrowRight className="size-3" />
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                    <div className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30 flex items-center justify-center text-white font-bold">
+                      {biz.name[0]}
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{biz.name}</h3>
+                    <p className="text-sm text-gray-500 mt-1 line-clamp-2 leading-relaxed">{biz.description}</p>
+                    <div className="flex items-center justify-between mt-4">
+                      <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">
+                        {mockServices.filter(s => s.businessId === biz.id).length} services
+                      </span>
+                      <span className="text-xs text-gray-400 group-hover:text-blue-500 flex items-center gap-1 transition-colors">
+                        View <ArrowRight className="w-3 h-3" />
+                      </span>
+                    </div>
+                  </div>
                 </Link>
               );
             })}
@@ -294,8 +259,8 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-10">
             <div>
-              <Badge variant="secondary" className="mb-2">Browse services</Badge>
-              <h2 className="text-3xl font-extrabold">Popular right now</h2>
+              <span className="text-blue-600 text-sm font-semibold uppercase tracking-widest">Browse services</span>
+              <h2 className="mt-2 text-3xl font-extrabold text-gray-900">Popular right now</h2>
             </div>
             <Button variant="link" asChild>
               <Link href="/explore">
@@ -304,39 +269,27 @@ export default function HomePage() {
             </Button>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {svcLoading ? (
-              Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i} className="py-5">
-                  <CardContent className="p-0 px-5 space-y-3">
-                    <Skeleton className="h-5 w-3/4" />
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-1/3" />
-                  </CardContent>
-                </Card>
-              ))
-            ) : featuredServices.length === 0 ? (
-              <div className="col-span-full text-center py-12 text-muted-foreground">
-                <p className="text-sm">No services available yet.</p>
-              </div>
-            ) : featuredServices.map((svc) => {
-              const bizName = getBusinessName(svc.businessId);
+            {featuredServices.map((svc) => {
+              const biz = mockBusinesses.find(b => b.id === svc.businessId);
               return (
-                <Link key={svc.id} href={`/service/${svc.id}`} className="group">
-                  <Card className="hover:border-primary/30 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 py-5">
-                    <CardContent className="p-0 px-5">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <h3 className="font-semibold group-hover:text-primary transition-colors leading-snug">{svc.name}</h3>
-                        <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary shrink-0 mt-0.5 transition-all" />
+                <Link key={svc.id} href={`/service/${svc.id}`} className="group bg-white rounded-2xl border border-gray-100 p-5 hover:border-blue-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors leading-snug">{svc.name}</h3>
+                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 shrink-0 mt-0.5 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                  <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed mb-4">{svc.description}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                        {biz?.name[0]}
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed mb-4">{svc.description}</p>
-                      <div className="flex items-center gap-2">
-                        <div className="size-5 rounded-full bg-primary flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                          {bizName[0]}
-                        </div>
-                        <span className="text-xs text-muted-foreground">{bizName}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      <span className="text-xs text-gray-500">{biz?.name}</span>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      <span className="text-xs text-gray-600 font-medium">4.9</span>
+                    </div>
+                  </div>
                 </Link>
               );
             })}
