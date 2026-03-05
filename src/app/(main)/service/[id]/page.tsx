@@ -7,14 +7,14 @@ import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import {
   GET_SERVICE, GET_BUSINESS, GET_SERVICE_FEEDBACKS, GET_USER,
 } from "@/graphql/queries";
-import { GET_SERVICE_PAGE, GET_SERVICE_FORM } from "@/graphql/queries";
-import { CREATE_SERVICE_APPOINTMENT, CREATE_PAYMENT_LINK } from "@/graphql/mutations";
-import type { Service, Business, ServiceFeedback, ServiceForm, ServicePage, Connection } from "@/types";
+import { GET_SERVICE_PAGE, GET_SERVICE_FORM, GET_SERVICE_AVAILABILITIES } from "@/graphql/queries";
+import { CREATE_SERVICE_APPOINTMENT, CREATE_PAYMENT_LINK, CREATE_SERVICE_FEEDBACK } from "@/graphql/mutations";
+import type { Service, Business, ServiceFeedback, ServiceForm, ServicePage, ServiceAvailability, Connection } from "@/types";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import {
   ArrowLeft, Star, CalendarDays, CreditCard, CheckCircle2,
   AlertCircle, BookOpen, MessageCircle,
-  ChevronRight, Loader2,
+  ChevronRight, Loader2, Clock,
 } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
 /* ── Form field shape stored inside ServiceForm.payload ─────── */
 
@@ -64,11 +65,33 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const { data: pageData } = useQuery<{ servicePageByService: ServicePage | null }>(
     GET_SERVICE_PAGE, { serviceId: id }
   );
-  const blogPayload = pageData?.servicePageByService?.payload as { title?: string; blocks?: Array<{ type: string; content: string; metadata?: Record<string, unknown> }> } | null;
-  const blogBlocks = blogPayload?.blocks ?? [];
-  const blogTitle = blogPayload?.title ?? "";
 
-  const { data: fbData } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
+  const { data: availData } = useQuery<{ serviceAvailabilities: ServiceAvailability[] }>(
+    GET_SERVICE_AVAILABILITIES, { serviceId: id, includeAll: false }, { skip: !id }
+  );
+  const availableSlots = availData?.serviceAvailabilities?.filter((s) => !s.isFull) ?? [];
+  type BlogBlock =
+    | { id: string; type: "heading";   level: 2 | 3; text: string }
+    | { id: string; type: "paragraph"; text: string }
+    | { id: string; type: "image";     url: string; caption: string }
+    | { id: string; type: "list";      items: string[] }
+    | { id: string; type: "divider" }
+    | { id: string; type: "callout";   text: string };
+  const blogPayload = pageData?.servicePageByService?.payload as {
+    title?: string;
+    subtitle?: string;
+    bannerImageUrl?: string;
+    blocks?: BlogBlock[];
+    tags?: string[];
+    status?: string;
+  } | null;
+  const blogBlocks   = blogPayload?.blocks   ?? [];
+  const blogTitle    = blogPayload?.title    ?? "";
+  const blogSubtitle = blogPayload?.subtitle ?? "";
+  const blogTags     = blogPayload?.tags     ?? [];
+  const blogBanner   = blogPayload?.bannerImageUrl ?? "";
+
+  const { data: fbData, refetch: refetchFeedbacks } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
     GET_SERVICE_FEEDBACKS, { first: 100, filter: { serviceId: id } }
   );
   const feedbacks = extractNodes(fbData?.serviceFeedbacks);
@@ -81,13 +104,25 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
   const { mutate: createPaymentLink, loading: paymentLoading } = useMutation<{
     createPaymentLink: { paymentLink: { id: string; redirectUrl: string | null } };
-  }>(CREATE_PAYMENT_LINK);
+  }>(CREATE_PAYMENT_LINK, { throwOnError: true });
+
+  const { mutate: submitReview, loading: reviewLoading } = useMutation<{
+    createServiceFeedback: { serviceFeedback: { id: string } };
+  }>(CREATE_SERVICE_FEEDBACK, { onCompleted: refetchFeedbacks });
 
   /* ── Local state ─────────────────────────────────────────── */
 
   const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [bookingStep, setBookingStep] = useState<"details" | "review" | "payment" | "confirmed">("details");
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  /* review form state */
+  const [reviewRating, setReviewRating]   = useState(0);
+  const [reviewTitle, setReviewTitle]     = useState("");
+  const [reviewBody, setReviewBody]       = useState("");
+  const [reviewDone, setReviewDone]       = useState(false);
 
   /* ── Loading / not-found ─────────────────────────────────── */
 
@@ -138,43 +173,38 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const handleSubmitBooking = () => setBookingStep("review");
 
   const handleConfirmBooking = async () => {
+    setPaymentError(null);
     try {
       const amount = computeAmount();
       const result = await createAppointment({
         input: {
           serviceId: id,
+          businessId: service.businessId,
           amount,
           currency: "PHP",
           payload: { formValues, status: "pending", scheduledAt: formValues["date"] || null },
+          ...(selectedSlotId ? { availabilityId: selectedSlotId } : {}),
         },
       });
       const aptId = result?.createServiceAppointment?.serviceAppointment?.id;
-      if (aptId) {
-        setAppointmentId(aptId);
-        setBookingStep("payment");
-      }
-    } catch (err) {
-      console.error("Failed to create appointment:", err);
-    }
-  };
+      if (!aptId) throw new Error("Failed to create appointment.");
 
-  const handlePayment = async () => {
-    if (!appointmentId) return;
-    try {
-      const result = await createPaymentLink({
-        input: { serviceAppointmentsId: appointmentId },
+      setAppointmentId(aptId);
+      setBookingStep("payment"); // show redirecting state
+
+      const payResult = await createPaymentLink({
+        input: { serviceAppointmentsId: aptId },
       });
-      const link = result?.createPaymentLink?.paymentLink;
+      const link = payResult?.createPaymentLink?.paymentLink;
       if (link?.redirectUrl) {
         window.location.href = link.redirectUrl;
       } else {
-        // Payment link created but no redirect — mark as confirmed
-        setBookingStep("confirmed");
+        throw new Error("Payment provider did not return a redirect URL.");
       }
     } catch (err) {
-      console.error("Failed to create payment link:", err);
-      // Fall through to confirmed for demo purposes
-      setBookingStep("confirmed");
+      console.error("Booking/payment failed:", err);
+      setPaymentError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setBookingStep("review");
     }
   };
 
@@ -240,46 +270,59 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                   </CardContent>
                 </Card>
 
-                {blogTitle && (
+                {(blogTitle || blogSubtitle || blogBanner || blogTags.length > 0) && (
                   <Card>
-                    <CardContent className="p-6">
-                      <h2 className="text-3xl font-bold mb-4">{blogTitle}</h2>
+                    <CardContent className="p-6 space-y-3">
+                      {blogBanner && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={blogBanner} alt="" className="w-full rounded-lg object-cover max-h-60" />
+                      )}
+                      {blogTitle && <h2 className="text-2xl font-bold text-foreground">{blogTitle}</h2>}
+                      {blogSubtitle && <p className="text-muted-foreground">{blogSubtitle}</p>}
+                      {blogTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {blogTags.map((tag) => (
+                            <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">{tag}</span>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
 
-                {blogBlocks.length > 0 && blogBlocks.map((block, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-6">
-                      {block.type === "heading" && (
-                        <h3 className="text-2xl font-bold text-foreground mb-2">{block.content}</h3>
-                      )}
-                      {block.type === "text" && (
-                        <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{block.content}</p>
-                      )}
-                      {block.type === "image" && block.content && (
-                        <img src={block.content} alt={block.metadata?.alt as string || "blog image"} className="rounded-lg w-full h-auto" />
-                      )}
-                      {block.type === "quote" && (
-                        <blockquote className="border-l-4 border-blue-600 pl-4 italic text-muted-foreground">{block.content}</blockquote>
-                      )}
-                      {block.type === "code" && (
-                        <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
-                          <code>{block.content}</code>
-                        </pre>
-                      )}
-                      {block.type === "video" && block.content && (
-                        <iframe
-                          width="100%"
-                          height="400"
-                          src={block.content}
-                          title="Video"
-                          allowFullScreen
-                          className="rounded-lg"
-                        />
-                      )}
-                    </CardContent>
-                  </Card>
+                {blogBlocks.map((block) => (
+                  <div key={block.id}>
+                    {block.type === "heading" && (
+                      block.level === 2
+                        ? <h2 className="text-2xl font-bold text-foreground mt-2">{block.text}</h2>
+                        : <h3 className="text-xl font-semibold text-foreground mt-2">{block.text}</h3>
+                    )}
+                    {block.type === "paragraph" && (
+                      <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{block.text}</p>
+                    )}
+                    {block.type === "image" && block.url && (
+                      <figure className="space-y-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={block.url} alt={block.caption || ""} className="rounded-lg w-full h-auto" />
+                        {block.caption && (
+                          <figcaption className="text-sm text-muted-foreground text-center">{block.caption}</figcaption>
+                        )}
+                      </figure>
+                    )}
+                    {block.type === "list" && (
+                      <ul className="list-disc list-inside space-y-1">
+                        {block.items.filter(Boolean).map((item, i) => (
+                          <li key={i} className="text-muted-foreground">{item}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {block.type === "divider" && <hr className="border-border my-2" />}
+                    {block.type === "callout" && (
+                      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                        <p className="text-base whitespace-pre-wrap">{block.text}</p>
+                      </div>
+                    )}
+                  </div>
                 ))}
 
                 <Card>
@@ -317,6 +360,100 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                     );
                   })
                 )}
+
+                {/* Write a review */}
+                {isLoggedIn && !reviewDone && (
+                  <Card>
+                    <CardContent className="p-6 space-y-4">
+                      <h3 className="text-base font-semibold text-foreground">Write a Review</h3>
+                      {/* Star picker */}
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setReviewRating(n)}
+                            className="focus:outline-none"
+                          >
+                            <Star
+                              className={`w-7 h-7 transition-colors ${
+                                n <= reviewRating
+                                  ? "fill-amber-400 text-amber-400"
+                                  : "text-muted-foreground/40 hover:text-amber-300"
+                              }`}
+                            />
+                          </button>
+                        ))}
+                        {reviewRating > 0 && (
+                          <span className="text-sm text-muted-foreground ml-2">
+                            {["Terrible", "Poor", "Average", "Good", "Excellent"][reviewRating - 1]}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Title</Label>
+                        <Input
+                          placeholder="Summarise your experience"
+                          value={reviewTitle}
+                          onChange={(e) => setReviewTitle(e.target.value)}
+                          maxLength={120}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Review</Label>
+                        <Textarea
+                          placeholder="Tell others what you thought of this service…"
+                          value={reviewBody}
+                          onChange={(e) => setReviewBody(e.target.value)}
+                          rows={4}
+                          maxLength={1000}
+                        />
+                      </div>
+                      <Button
+                        onClick={async () => {
+                          if (reviewRating === 0) return;
+                          const ok = await submitReview({
+                            input: {
+                              serviceId: id,
+                              rating: reviewRating,
+                              payload: { title: reviewTitle.trim(), body: reviewBody.trim() },
+                            },
+                          });
+                          if (ok) {
+                            setReviewDone(true);
+                            setReviewRating(0);
+                            setReviewTitle("");
+                            setReviewBody("");
+                          }
+                        }}
+                        disabled={reviewRating === 0 || reviewLoading}
+                        className="w-full"
+                      >
+                        {reviewLoading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                        Submit Review
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+                {isLoggedIn && reviewDone && (
+                  <Card>
+                    <CardContent className="p-6 text-center space-y-2">
+                      <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto" />
+                      <p className="font-semibold text-foreground">Review submitted!</p>
+                      <p className="text-sm text-muted-foreground">Thank you for your feedback.</p>
+                    </CardContent>
+                  </Card>
+                )}
+                {!isLoggedIn && (
+                  <Card>
+                    <CardContent className="p-6 text-center">
+                      <p className="text-sm text-muted-foreground mb-3">Sign in to leave a review</p>
+                      <Button variant="outline" size="sm" onClick={() => signIn("keycloak")}>
+                        Sign in
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
             </Tabs>
           </div>
@@ -327,6 +464,11 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
               <CardHeader className="border-b border-border">
                 <CardTitle>Book This Service</CardTitle>
                 <p className="text-sm text-muted-foreground">{business.name}</p>
+                {service.price && (
+                  <p className="text-xl font-bold text-primary">
+                    {formatCurrency(parseFloat(service.price.toString()), "PHP")}
+                  </p>
+                )}
               </CardHeader>
 
               {bookingStep === "details" && (
@@ -341,13 +483,46 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                     </div>
                   ) : (
                     <>
+                      {/* ── Slot picker (only shown when service has availability slots) ── */}
+                      {availableSlots.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Choose a Time Slot</Label>
+                          <div className="grid gap-2">
+                            {availableSlots.map((slot) => {
+                              const date = new Date(slot.scheduledAt);
+                              const isSelected = selectedSlotId === slot.id;
+                              return (
+                                <button
+                                  key={slot.id}
+                                  type="button"
+                                  onClick={() => setSelectedSlotId(isSelected ? null : slot.id)}
+                                  className={`flex items-center justify-between rounded-lg border p-3 text-sm transition-colors text-left ${
+                                    isSelected
+                                      ? "border-primary bg-primary/10 text-primary"
+                                      : "border-border hover:border-primary/50 hover:bg-muted"
+                                  }`}
+                                >
+                                  <span className="font-medium">
+                                    {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}{" "}
+                                    {date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                  <span className="flex items-center gap-1 text-muted-foreground">
+                                    <Clock className="h-3.5 w-3.5" />
+                                    {slot.durationMinutes} min
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {fields.map((field) => (
                         <div key={field.id} className="space-y-2">
                           <Label>{field.name}</Label>
                           {field.description && (
                             <p className="text-xs text-muted-foreground">{field.description}</p>
                           )}
-
                           {field.type === "select" && field.options && field.options.length > 0 ? (
                             <Select
                               value={formValues[field.id] || ""}
@@ -430,6 +605,20 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                         <span className="text-muted-foreground">Business</span>
                         <span className="text-foreground">{business.name}</span>
                       </div>
+                      {selectedSlotId && (() => {
+                        const slot = availableSlots.find((s) => s.id === selectedSlotId);
+                        if (!slot) return null;
+                        const d = new Date(slot.scheduledAt);
+                        return (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Time Slot</span>
+                            <span className="text-foreground">
+                              {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
+                              {d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       {Object.entries(formValues).map(([fieldId, value]) => {
                         const field = fields.find((f) => f.id === fieldId);
                         if (!value || !field) return null;
@@ -448,12 +637,18 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                       )}
                     </div>
                   </div>
+                  {paymentError && (
+                    <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <p>{paymentError}</p>
+                    </div>
+                  )}
                   <div className="flex gap-3">
                     <Button variant="outline" onClick={() => setBookingStep("details")} className="flex-1">
                       Back
                     </Button>
-                    <Button onClick={handleConfirmBooking} disabled={bookingLoading} className="flex-1">
-                      {bookingLoading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                    <Button onClick={handleConfirmBooking} disabled={bookingLoading || paymentLoading} className="flex-1">
+                      {(bookingLoading || paymentLoading) && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
                       Confirm & Pay
                     </Button>
                   </div>
@@ -462,17 +657,13 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
               {bookingStep === "payment" && (
                 <CardContent className="p-6 space-y-5">
-                  <div className="text-center">
-                    <CreditCard className="w-10 h-10 text-primary mx-auto mb-3" />
-                    <h4 className="font-semibold text-foreground">Payment</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Complete your payment to finalize the booking.
+                  <div className="text-center py-4">
+                    <Loader2 className="w-12 h-12 text-primary mx-auto mb-4 animate-spin" />
+                    <h4 className="font-semibold text-foreground">Redirecting to PayMaya...</h4>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Please wait while we set up your secure payment.
                     </p>
                   </div>
-                  <Button onClick={handlePayment} disabled={paymentLoading} className="w-full bg-green-600 hover:bg-green-700">
-                    {paymentLoading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                    Proceed to Payment
-                  </Button>
                 </CardContent>
               )}
 
@@ -491,7 +682,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => { setBookingStep("details"); setFormValues({}); setAppointmentId(null); }}
+                      onClick={() => { setBookingStep("details"); setFormValues({}); setAppointmentId(null); setPaymentError(null); }}
                       className="w-full"
                     >
                       Book Another

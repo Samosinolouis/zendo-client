@@ -124,6 +124,7 @@ export interface ServiceForm {
 export interface ServiceAppointment {
   id: string;
   serviceId: string;
+  businessId?: string;
   userId?: string;
   amount: number; // Float in API
   currency: string;
@@ -271,6 +272,21 @@ export interface BillingAddress {
   postalCode: string;
   country: string;
   createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ── Service Availability ──────────────────────────────────────
+
+export interface ServiceAvailability {
+  id: string;
+  serviceId: string;
+  businessId: string;
+  scheduledAt: string; // ISO datetime
+  durationMinutes: number;
+  maxBookings: number;
+  bookedCount: number;
+  isFull: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

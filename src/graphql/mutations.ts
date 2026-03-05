@@ -221,6 +221,18 @@ export const CREATE_SERVICE_APPOINTMENT = /* GraphQL */ `
   }
 `;
 
+export const UPDATE_SERVICE_APPOINTMENT_STATUS = /* GraphQL */ `
+  mutation UpdateServiceAppointmentStatus($id: ID!, $status: String!) {
+    updateServiceAppointmentStatus(id: $id, status: $status) {
+      serviceAppointment {
+        id
+        payload
+        updatedAt
+      }
+    }
+  }
+`;
+
 // ── Service Feedback ──────────────────────────────────────────
 
 export const CREATE_SERVICE_FEEDBACK = /* GraphQL */ `
@@ -363,6 +375,35 @@ export const REQUEST_SALES_INVOICE = /* GraphQL */ `
         createdAt
         updatedAt
       }
+    }
+  }
+`;
+
+// ── Service Availability ─────────────────────────────────────
+
+export const CREATE_SERVICE_AVAILABILITY = /* GraphQL */ `
+  mutation CreateServiceAvailability($input: CreateServiceAvailabilityInput!) {
+    createServiceAvailability(input: $input) {
+      serviceAvailability {
+        id
+        serviceId
+        businessId
+        scheduledAt
+        durationMinutes
+        maxBookings
+        bookedCount
+        isFull
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const DELETE_SERVICE_AVAILABILITY = /* GraphQL */ `
+  mutation DeleteServiceAvailability($id: ID!) {
+    deleteServiceAvailability(id: $id) {
+      id
     }
   }
 `;

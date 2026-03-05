@@ -305,6 +305,42 @@ export const GET_SERVICE_TAGS_BY_SERVICE = /* GraphQL */ `
   }
 `;
 
+// ── Service Availability ─────────────────────────────────────
+
+export const GET_SERVICE_AVAILABILITIES = /* GraphQL */ `
+  query GetServiceAvailabilities($serviceId: ID!, $includeAll: Boolean) {
+    serviceAvailabilities(serviceId: $serviceId, includeAll: $includeAll) {
+      id
+      serviceId
+      businessId
+      scheduledAt
+      durationMinutes
+      maxBookings
+      bookedCount
+      isFull
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const GET_BUSINESS_AVAILABILITIES = /* GraphQL */ `
+  query GetBusinessAvailabilities($businessId: ID!, $includeAll: Boolean) {
+    businessAvailabilities(businessId: $businessId, includeAll: $includeAll) {
+      id
+      serviceId
+      businessId
+      scheduledAt
+      durationMinutes
+      maxBookings
+      bookedCount
+      isFull
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 // ── Tags ──────────────────────────────────────────────────────
 
 export const GET_TAGS = /* GraphQL */ `

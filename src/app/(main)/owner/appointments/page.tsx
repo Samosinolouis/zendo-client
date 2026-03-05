@@ -2,10 +2,11 @@
 
 import { useMemo } from "react";
 import { useAuth } from "@/providers/AuthProvider";
-import { useQuery, extractNodes } from "@/graphql/hooks";
+import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_SERVICES, GET_SERVICE_APPOINTMENTS, GET_USER } from "@/graphql/queries";
+import { UPDATE_SERVICE_APPOINTMENT_STATUS } from "@/graphql/mutations";
 import type { Service, ServiceAppointment, User, Connection } from "@/types";
-import { formatCurrency, formatDateTime, getStatusColor, getInitials } from "@/lib/utils";
+import { formatCurrency, formatDateTime, getInitials } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,7 +19,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CalendarCheck, Clock } from "lucide-react";
+
+const STATUS_OPTIONS = [
+  { value: "pending",   label: "Pending" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "done",      label: "Done" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const STATUS_COLORS: Record<string, string> = {
+  pending:   "bg-yellow-100 text-yellow-800",
+  confirmed: "bg-blue-100 text-blue-800",
+  done:      "bg-green-100 text-green-800",
+  cancelled: "bg-red-100 text-red-800",
+};
 
 function aptStatus(apt: ServiceAppointment): string {
   const p = apt.payload as Record<string, unknown> | null;
@@ -29,7 +51,6 @@ function aptScheduledAt(apt: ServiceAppointment): string | null {
   return (p?.scheduledAt as string) ?? null;
 }
 
-/** Renders customer info — lazy-loads user by id */
 function CustomerCell({ userId }: { userId?: string }) {
   const { data } = useQuery<{ user: User }>(GET_USER, { id: userId! }, { skip: !userId });
   const customer = data?.user ?? null;
@@ -50,12 +71,45 @@ function CustomerCell({ userId }: { userId?: string }) {
   );
 }
 
+function StatusCell({ apt, refetch }: { apt: ServiceAppointment; refetch: () => void }) {
+  const { mutate: updateStatus, loading } = useMutation<{
+    updateServiceAppointmentStatus: { serviceAppointment: { id: string; payload: unknown } };
+  }>(UPDATE_SERVICE_APPOINTMENT_STATUS, { onCompleted: refetch });
+
+  const current = aptStatus(apt);
+
+  return (
+    <Select
+      value={current}
+      disabled={loading}
+      onValueChange={(val) => updateStatus({ id: apt.id, status: val })}
+    >
+      <SelectTrigger className="w-32 h-7 text-xs border-0 shadow-none p-0">
+        <SelectValue>
+          <Badge
+            variant="secondary"
+            className={`capitalize text-xs font-medium ${STATUS_COLORS[current] ?? "bg-muted text-muted-foreground"}`}
+          >
+            {current}
+          </Badge>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {STATUS_OPTIONS.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value} className="text-sm">
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export default function OwnerAppointmentsPage() {
   const { user, businesses } = useAuth();
 
   const bizIds = useMemo(() => businesses.map((b) => b.id), [businesses]);
 
-  // Fetch services for name lookup
   const { data: svcData } = useQuery<{ services: Connection<Service> }>(
     GET_SERVICES, { first: 200 }, { skip: !user }
   );
@@ -72,8 +126,7 @@ export default function OwnerAppointmentsPage() {
 
   const serviceIds = useMemo(() => ownerServices.map((s) => s.id), [ownerServices]);
 
-  // Fetch all appointments, then filter to owner's services
-  const { data: aptData, loading } = useQuery<{ serviceAppointments: Connection<ServiceAppointment> }>(
+  const { data: aptData, loading, refetch } = useQuery<{ serviceAppointments: Connection<ServiceAppointment> }>(
     GET_SERVICE_APPOINTMENTS, { first: 500 }, { skip: serviceIds.length === 0 }
   );
   const allAppointments = useMemo(() => {
@@ -85,7 +138,6 @@ export default function OwnerAppointmentsPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Appointments</h1>
         <p className="text-muted-foreground mt-1">All bookings across your businesses</p>
@@ -121,7 +173,6 @@ export default function OwnerAppointmentsPage() {
               <TableBody>
                 {allAppointments.map((apt) => {
                   const svc = svcMap[apt.serviceId];
-                  const status = aptStatus(apt);
                   const scheduled = aptScheduledAt(apt);
                   return (
                     <TableRow key={apt.id}>
@@ -139,9 +190,7 @@ export default function OwnerAppointmentsPage() {
                         {formatCurrency(apt.amount, apt.currency)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className={`capitalize text-xs ${getStatusColor(status)}`}>
-                          {status}
-                        </Badge>
+                        <StatusCell apt={apt} refetch={refetch} />
                       </TableCell>
                     </TableRow>
                   );

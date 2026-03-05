@@ -67,8 +67,18 @@ interface UseMutationResult<T> {
 
 /**
  * Hook that returns a function to execute a GraphQL mutation.
+ *
+ * When `throwOnError: true` is set, GraphQL/network errors are thrown
+ * as exceptions so the caller's try-catch receives the real message.
  */
-export function useMutation<T>(mutation: string): UseMutationResult<T> {
+export function useMutation<T>(
+  mutation: string,
+  options?: {
+    onCompleted?: (data: T | null) => void;
+    onError?: (err: GraphQLError) => void;
+    throwOnError?: boolean;
+  }
+): UseMutationResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<GraphQLError | null>(null);
@@ -81,19 +91,25 @@ export function useMutation<T>(mutation: string): UseMutationResult<T> {
         const res = await graphqlClient<T>(mutation, variables);
         if (res.errors?.length) {
           setError(res.errors[0]);
+          options?.onError?.(res.errors[0]);
           setData(null);
+          if (options?.throwOnError) throw new Error(res.errors[0].message);
           return null;
         }
         setData(res.data ?? null);
+        options?.onCompleted?.(res.data ?? null);
         return res.data ?? null;
-      } catch {
-        setError({ message: "Network error" });
+      } catch (e) {
+        if (e instanceof Error && options?.throwOnError) throw e;
+        const err: GraphQLError = { message: e instanceof Error ? e.message : "Network error" };
+        setError(err);
+        options?.onError?.(err);
         return null;
       } finally {
         setLoading(false);
       }
     },
-    [mutation]
+    [mutation, options]
   );
 
   return { mutate, data, loading, error };
