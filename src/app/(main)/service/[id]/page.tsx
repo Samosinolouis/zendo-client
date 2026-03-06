@@ -100,7 +100,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
   const { mutate: createAppointment, loading: bookingLoading } = useMutation<{
     createServiceAppointment: { serviceAppointment: { id: string } };
-  }>(CREATE_SERVICE_APPOINTMENT);
+  }>(CREATE_SERVICE_APPOINTMENT, { throwOnError: true });
 
   const { mutate: createPaymentLink, loading: paymentLoading } = useMutation<{
     createPaymentLink: { paymentLink: { id: string; redirectUrl: string | null } };
@@ -157,17 +157,21 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const computeAmount = (): number => {
-    // Start with base service price
-    let total = service.price ? parseFloat(service.price.toString()) : 0;
+    // Start with base service price (defensive parse in case backend returns non-primitive)
+    const base = Number(service.price);
+    let total = Number.isFinite(base) ? base : 0;
     
     // Add any extra amounts from form options
     for (const field of fields) {
       if (field.type === "select" && field.options) {
         const selected = field.options.find((o) => o.value === formValues[field.id]);
-        if (selected?.amount) total += selected.amount;
+        const optionAmount = Number(selected?.amount ?? 0);
+        if (Number.isFinite(optionAmount)) total += optionAmount;
       }
     }
-    return total;
+
+    // Ensure mutation always receives a valid numeric amount.
+    return Number.isFinite(total) ? total : 0;
   };
 
   const handleSubmitBooking = () => setBookingStep("review");

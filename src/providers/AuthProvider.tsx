@@ -144,6 +144,12 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       setUser(null);
       setBusinesses([]);
     }
+    // If the session has a token refresh error, force sign-out so the user
+    // gets redirected to Keycloak for a fresh login instead of being stuck
+    // with a session that has no valid accessToken.
+    if (status === "authenticated" && (session as any)?.error === "RefreshAccessTokenError") {
+      signOut({ callbackUrl: "/" });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session, appUser, fetchUserFromAPI]);
 
