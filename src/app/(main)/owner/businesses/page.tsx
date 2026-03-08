@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/providers/ToastProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
+import type { GraphQLError } from "@/lib/graphql-client";
 import { GET_SERVICES } from "@/graphql/queries";
 import {
   CREATE_BUSINESS,
@@ -44,6 +45,19 @@ import {
   AlertTriangle,
   ImageIcon,
 } from "lucide-react";
+
+// ── GQL Error resolver ───────────────────────────────────────
+
+const GQL_ERROR_MESSAGES: Record<string, string> = {
+  NOT_FOUND: "Business not found.",
+  FORBIDDEN: "You don't have permission to perform this action.",
+  VALIDATION_ERROR: "Invalid input. Please check your fields and try again.",
+};
+
+function resolveGqlError(err: GraphQLError): string {
+  const code = err.extensions?.code;
+  return (code && GQL_ERROR_MESSAGES[code]) ?? err.message ?? "Something went wrong.";
+}
 
 // ── Business Form ─────────────────────────────────────────────
 
@@ -158,39 +172,39 @@ export default function OwnerBusinessesPage() {
   // ── Mutations ──────────────────────────────────────────
   const { mutate: createBusiness, loading: creating } = useMutation<{
     createBusiness: { business: Business };
-  }>(CREATE_BUSINESS);
+  }>(CREATE_BUSINESS, {
+    onError: (err) => showError(resolveGqlError(err)),
+  });
 
   const { mutate: updateBusiness, loading: updating } = useMutation<{
     updateBusiness: { business: Business };
-  }>(UPDATE_BUSINESS);
+  }>(UPDATE_BUSINESS, {
+    onError: (err) => showError(resolveGqlError(err)),
+  });
 
   const { mutate: deleteBusiness, loading: deleting } = useMutation<{
     deleteBusiness: { success: boolean };
-  }>(DELETE_BUSINESS);
+  }>(DELETE_BUSINESS, {
+    onError: (err) => showError(resolveGqlError(err)),
+  });
 
   if (!user) return null;
 
   // ── Handlers ───────────────────────────────────────────
 
   const handleCreate = async () => {
-    try {
-      const res = await createBusiness({
-        input: {
-          name: createForm.name.trim(),
-          description: createForm.description.trim(),
-          bannerImageUrl: createForm.bannerImageUrl || undefined,
-        },
-      });
-      if (res) {
-        setShowCreate(false);
-        setCreateForm(emptyForm());
-        refreshBusinesses();
-        showSuccess("Business created successfully.");
-      } else {
-        showError();
-      }
-    } catch {
-      showError();
+    const res = await createBusiness({
+      input: {
+        name: createForm.name.trim(),
+        description: createForm.description.trim(),
+        bannerImageUrl: createForm.bannerImageUrl || undefined,
+      },
+    });
+    if (res) {
+      setShowCreate(false);
+      setCreateForm(emptyForm());
+      refreshBusinesses();
+      showSuccess("Business created successfully.");
     }
   };
 
@@ -205,40 +219,28 @@ export default function OwnerBusinessesPage() {
 
   const handleEdit = async () => {
     if (!editTarget) return;
-    try {
-      const res = await updateBusiness({
-        input: {
-          id: editTarget.id,
-          name: editForm.name.trim(),
-          description: editForm.description.trim(),
-          bannerImageUrl: editForm.bannerImageUrl || undefined,
-        },
-      });
-      if (res) {
-        setEditTarget(null);
-        refreshBusinesses();
-        showSuccess("Business updated successfully.");
-      } else {
-        showError();
-      }
-    } catch {
-      showError();
+    const res = await updateBusiness({
+      input: {
+        id: editTarget.id,
+        name: editForm.name.trim(),
+        description: editForm.description.trim(),
+        bannerImageUrl: editForm.bannerImageUrl || undefined,
+      },
+    });
+    if (res) {
+      setEditTarget(null);
+      refreshBusinesses();
+      showSuccess("Business updated successfully.");
     }
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    try {
-      const res = await deleteBusiness({ input: { id: deleteTarget.id } });
-      if (res) {
-        setDeleteTarget(null);
-        refreshBusinesses();
-        showSuccess("Business deleted.");
-      } else {
-        showError();
-      }
-    } catch {
-      showError();
+    const res = await deleteBusiness({ input: { id: deleteTarget.id } });
+    if (res) {
+      setDeleteTarget(null);
+      refreshBusinesses();
+      showSuccess("Business deleted.");
     }
   };
 
