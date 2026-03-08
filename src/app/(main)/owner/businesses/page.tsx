@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Image from "next/image";
 import { useAuth } from "@/providers/AuthProvider";
+import { useToast } from "@/providers/ToastProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_SERVICES } from "@/graphql/queries";
 import {
@@ -126,6 +127,7 @@ function BusinessForm({ state, onChange }: BusinessFormProps) {
 
 export default function OwnerBusinessesPage() {
   const { user, businesses, refreshBusinesses } = useAuth();
+  const { showSuccess, showError } = useToast();
 
   // ── Dialog state ───────────────────────────────────────
   const [showCreate, setShowCreate] = useState(false);
@@ -171,17 +173,24 @@ export default function OwnerBusinessesPage() {
   // ── Handlers ───────────────────────────────────────────
 
   const handleCreate = async () => {
-    const res = await createBusiness({
-      input: {
-        name: createForm.name.trim(),
-        description: createForm.description.trim(),
-        bannerImageUrl: createForm.bannerImageUrl || undefined,
-      },
-    });
-    if (res) {
-      setShowCreate(false);
-      setCreateForm(emptyForm());
-      refreshBusinesses();
+    try {
+      const res = await createBusiness({
+        input: {
+          name: createForm.name.trim(),
+          description: createForm.description.trim(),
+          bannerImageUrl: createForm.bannerImageUrl || undefined,
+        },
+      });
+      if (res) {
+        setShowCreate(false);
+        setCreateForm(emptyForm());
+        refreshBusinesses();
+        showSuccess("Business created successfully.");
+      } else {
+        showError();
+      }
+    } catch {
+      showError();
     }
   };
 
@@ -196,26 +205,40 @@ export default function OwnerBusinessesPage() {
 
   const handleEdit = async () => {
     if (!editTarget) return;
-    const res = await updateBusiness({
-      input: {
-        id: editTarget.id,
-        name: editForm.name.trim(),
-        description: editForm.description.trim(),
-        bannerImageUrl: editForm.bannerImageUrl || undefined,
-      },
-    });
-    if (res) {
-      setEditTarget(null);
-      refreshBusinesses();
+    try {
+      const res = await updateBusiness({
+        input: {
+          id: editTarget.id,
+          name: editForm.name.trim(),
+          description: editForm.description.trim(),
+          bannerImageUrl: editForm.bannerImageUrl || undefined,
+        },
+      });
+      if (res) {
+        setEditTarget(null);
+        refreshBusinesses();
+        showSuccess("Business updated successfully.");
+      } else {
+        showError();
+      }
+    } catch {
+      showError();
     }
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    const res = await deleteBusiness({ input: { id: deleteTarget.id } });
-    if (res) {
-      setDeleteTarget(null);
-      refreshBusinesses();
+    try {
+      const res = await deleteBusiness({ input: { id: deleteTarget.id } });
+      if (res) {
+        setDeleteTarget(null);
+        refreshBusinesses();
+        showSuccess("Business deleted.");
+      } else {
+        showError();
+      }
+    } catch {
+      showError();
     }
   };
 
