@@ -865,9 +865,9 @@ function ServicePageEditor({
   );
 }
 
-// ─── Owner Blog Page ──────────────────────────────────────────
+// ─── Owner Pages ──────────────────────────────────────────
 
-export default function OwnerBlogPage() {
+export default function OwnerPages() {
   const { user, businesses } = useAuth();
   const [selected, setSelected] = useState<ServiceWithBiz | null>(null);
   const [search, setSearch] = useState("");
@@ -910,7 +910,7 @@ export default function OwnerBlogPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">Blog / Service Pages</h1>
+        <h1 className="text-2xl font-bold">Pages</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Write and publish rich content pages for each of your services.
         </p>

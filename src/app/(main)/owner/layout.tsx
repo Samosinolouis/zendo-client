@@ -12,7 +12,7 @@ const ownerNav = [
   { href: "/owner/dashboard",    label: "Overview",      icon: LayoutDashboard },
   { href: "/owner/businesses",   label: "Businesses",    icon: Store },
   { href: "/owner/services",     label: "Services",      icon: Wrench },
-  { href: "/owner/blog",         label: "Blog",          icon: BookOpen },
+  { href: "/owner/pages",         label: "Pages",          icon: BookOpen },
   { href: "/owner/appointments", label: "Appointments",  icon: CalendarDays },
   { href: "/owner/payouts",      label: "Payouts",       icon: DollarSign },
   { href: "/owner/feedbacks",    label: "Feedbacks",     icon: MessageSquare },
