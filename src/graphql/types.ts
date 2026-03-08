@@ -49,6 +49,8 @@ export type BillingAddress = Node & {
   state?: Maybe<Scalars['String']['output']>;
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+  /** The user who owns this billing address */
+  user?: Maybe<User>;
   /** Owning user ID */
   userId: Scalars['ID']['output'];
 };
@@ -86,6 +88,8 @@ export type Business = Node & {
   __typename?: 'Business';
   /** URL to the business banner image */
   bannerImageUrl?: Maybe<Scalars['String']['output']>;
+  /** Feedbacks for this business */
+  businessFeedbacks?: Maybe<BusinessFeedbackConnection>;
   /** When the record was created */
   createdAt: Scalars['DateTime']['output'];
   /** ID of the user who created this record */
@@ -98,10 +102,46 @@ export type Business = Node & {
   metrics?: Maybe<BusinessMetric>;
   /** Business name */
   name: Scalars['String']['output'];
+  /** Payments received by this business */
+  payments?: Maybe<PaymentConnection>;
+  /** Payout statements for this business */
+  payoutStatements?: Maybe<PayoutStatementConnection>;
+  /** Services offered by this business */
+  services?: Maybe<ServiceConnection>;
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+  /** The user who owns this business */
+  user?: Maybe<User>;
   /** Owning user ID */
   userId: Scalars['ID']['output'];
+};
+
+
+/** A business entity owned by a user. */
+export type BusinessBusinessFeedbacksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/** A business entity owned by a user. */
+export type BusinessPaymentsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/** A business entity owned by a user. */
+export type BusinessPayoutStatementsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/** A business entity owned by a user. */
+export type BusinessServicesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
 };
 
 export type BusinessConnection = {
@@ -119,6 +159,8 @@ export type BusinessEdge = {
 /** A customer's feedback/review for a business. */
 export type BusinessFeedback = Node & {
   __typename?: 'BusinessFeedback';
+  /** The business being reviewed */
+  business?: Maybe<Business>;
   /** ID of the business being reviewed */
   businessId: Scalars['ID']['output'];
   /** When the record was created */
@@ -177,6 +219,8 @@ export type BusinessMetric = Node & {
   __typename?: 'BusinessMetric';
   /** Average rating (1-5) */
   averageRating: Scalars['Float']['output'];
+  /** The associated business */
+  business?: Maybe<Business>;
   /** ID of the associated business */
   businessId: Scalars['ID']['output'];
   /** When the record was created */
@@ -253,10 +297,13 @@ export type CreateBusinessPayload = {
 };
 
 export type CreatePaymentLinkInput = {
-  canceledUrl: Scalars['String']['input'];
-  failedUrl: Scalars['String']['input'];
+  /** Defaults to ${FRONTEND_URL}/appointment/cancelled if omitted */
+  canceledUrl?: InputMaybe<Scalars['String']['input']>;
+  /** Defaults to ${FRONTEND_URL}/appointment/failed if omitted */
+  failedUrl?: InputMaybe<Scalars['String']['input']>;
   serviceAppointmentsId: Scalars['ID']['input'];
-  successUrl: Scalars['String']['input'];
+  /** Defaults to ${FRONTEND_URL}/appointment/success if omitted */
+  successUrl?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type CreatePaymentLinkPayload = {
@@ -281,6 +328,8 @@ export type CreatePayoutStatementPayload = {
 
 export type CreateServiceAppointmentInput = {
   amount: Scalars['Float']['input'];
+  /** Optional: link this appointment to a specific availability slot */
+  availabilityId?: InputMaybe<Scalars['ID']['input']>;
   /** Must match the businessId of the service — validated server-side */
   businessId: Scalars['ID']['input'];
   currency: Scalars['String']['input'];
@@ -291,6 +340,20 @@ export type CreateServiceAppointmentInput = {
 export type CreateServiceAppointmentPayload = {
   __typename?: 'CreateServiceAppointmentPayload';
   serviceAppointment: ServiceAppointment;
+};
+
+export type CreateServiceAvailabilityInput = {
+  /**  Duration in minutes (default 60)  */
+  durationMinutes?: InputMaybe<Scalars['Int']['input']>;
+  /**  Max bookings for this slot (default 1)  */
+  maxBookings?: InputMaybe<Scalars['Int']['input']>;
+  scheduledAt: Scalars['DateTime']['input'];
+  serviceId: Scalars['ID']['input'];
+};
+
+export type CreateServiceAvailabilityPayload = {
+  __typename?: 'CreateServiceAvailabilityPayload';
+  serviceAvailability: ServiceAvailability;
 };
 
 export type CreateServiceBillingInput = {
@@ -318,6 +381,8 @@ export type CreateServiceInput = {
   bannerImageUrl?: InputMaybe<Scalars['String']['input']>;
   businessId: Scalars['ID']['input'];
   description?: InputMaybe<Scalars['String']['input']>;
+  maxPrice?: InputMaybe<Scalars['Float']['input']>;
+  minPrice?: InputMaybe<Scalars['Float']['input']>;
   name: Scalars['String']['input'];
 };
 
@@ -358,6 +423,11 @@ export type DeleteBusinessPayload = {
   __typename?: 'DeleteBusinessPayload';
   deletedId: Scalars['ID']['output'];
   success: Scalars['Boolean']['output'];
+};
+
+export type DeleteServiceAvailabilityPayload = {
+  __typename?: 'DeleteServiceAvailabilityPayload';
+  id: Scalars['ID']['output'];
 };
 
 export type DeleteServiceFormInput = {
@@ -433,6 +503,7 @@ export type Mutation = {
   createService: CreateServicePayload;
   /** Book a service appointment (requires authentication) */
   createServiceAppointment: CreateServiceAppointmentPayload;
+  createServiceAvailability: CreateServiceAvailabilityPayload;
   /** Create a service billing (admin only) */
   createServiceBilling: CreateServiceBillingPayload;
   /** Submit a feedback/review for a service (requires authentication) */
@@ -445,6 +516,7 @@ export type Mutation = {
   deleteBusiness: DeleteBusinessPayload;
   /** Delete a service (business owner only) */
   deleteService: DeleteServicePayload;
+  deleteServiceAvailability: DeleteServiceAvailabilityPayload;
   /** Delete a service form (service owner only) */
   deleteServiceForm: DeleteServiceFormPayload;
   /** Delete a service page (service owner only) */
@@ -476,6 +548,8 @@ export type Mutation = {
   updatePhoneNumber: UpdatePhoneNumberPayload;
   /** Update a service (business owner only) */
   updateService: UpdateServicePayload;
+  /** Update appointment status — only callable by the business owner */
+  updateServiceAppointmentStatus: UpdateServiceAppointmentStatusPayload;
   /** Update an existing tag */
   updateTag: UpdateTagPayload;
   /** Update an existing todo (owner only) */
@@ -534,6 +608,11 @@ export type MutationCreateServiceAppointmentArgs = {
 };
 
 
+export type MutationCreateServiceAvailabilityArgs = {
+  input: CreateServiceAvailabilityInput;
+};
+
+
 export type MutationCreateServiceBillingArgs = {
   input: CreateServiceBillingInput;
 };
@@ -561,6 +640,11 @@ export type MutationDeleteBusinessArgs = {
 
 export type MutationDeleteServiceArgs = {
   input: DeleteServiceInput;
+};
+
+
+export type MutationDeleteServiceAvailabilityArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -634,6 +718,12 @@ export type MutationUpdateServiceArgs = {
 };
 
 
+export type MutationUpdateServiceAppointmentStatusArgs = {
+  id: Scalars['ID']['input'];
+  status: Scalars['String']['input'];
+};
+
+
 export type MutationUpdateTagArgs = {
   input: UpdateTagInput;
 };
@@ -684,6 +774,8 @@ export type Notification = Node & {
   provider: Scalars['String']['output'];
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+  /** The user who received this notification */
+  user?: Maybe<User>;
   /** ID of the recipient user */
   userId: Scalars['ID']['output'];
 };
@@ -761,6 +853,8 @@ export type Payment = Node & {
   __typename?: 'Payment';
   /** Payment amount */
   amount: Scalars['String']['output'];
+  /** The business that received the payment */
+  business?: Maybe<Business>;
   /** ID of the business receiving payment */
   businessId: Scalars['ID']['output'];
   /** When the record was created */
@@ -781,12 +875,25 @@ export type Payment = Node & {
   providerPaymentId: Scalars['String']['output'];
   /** When the payment was refunded (if applicable) */
   refundedAt?: Maybe<Scalars['DateTime']['output']>;
+  /** Sales invoices for this payment */
+  salesInvoices?: Maybe<SalesInvoiceConnection>;
+  /** The associated service appointment */
+  serviceAppointment?: Maybe<ServiceAppointment>;
   /** ID of the associated service appointment */
   serviceAppointmentsId: Scalars['ID']['output'];
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+  /** The user who made the payment */
+  user?: Maybe<User>;
   /** ID of the user who paid */
   userId: Scalars['ID']['output'];
+};
+
+
+/** A completed payment record. Created via webhook only. */
+export type PaymentSalesInvoicesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
 };
 
 export type PaymentConnection = {
@@ -830,6 +937,8 @@ export type PaymentLink = Node & {
   providerPaymentLinkId: Scalars['String']['output'];
   /** Redirect URL for the payment */
   redirectUrl: Scalars['String']['output'];
+  /** The associated service appointment */
+  serviceAppointment?: Maybe<ServiceAppointment>;
   /** ID of the associated service appointment */
   serviceAppointmentsId: Scalars['ID']['output'];
   /** When the record was last updated */
@@ -875,6 +984,8 @@ export enum PaymentSortField {
 /** A payout statement for a business. Created by admin. */
 export type PayoutStatement = Node & {
   __typename?: 'PayoutStatement';
+  /** The associated business */
+  business?: Maybe<Business>;
   /** ID of the business */
   businessId: Scalars['ID']['output'];
   /** When the record was created */
@@ -891,12 +1002,21 @@ export type PayoutStatement = Node & {
   periodEnd: Scalars['DateTime']['output'];
   /** Start of the payout period */
   periodStart: Scalars['DateTime']['output'];
+  /** Service billings in this payout statement */
+  serviceBillings?: Maybe<ServiceBillingConnection>;
   /** Total fees deducted */
   totalFees: Scalars['Float']['output'];
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
   /** Withholding tax amount */
   withholdingTax: Scalars['Float']['output'];
+};
+
+
+/** A payout statement for a business. Created by admin. */
+export type PayoutStatementServiceBillingsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
 };
 
 export type PayoutStatementConnection = {
@@ -949,6 +1069,8 @@ export type Query = {
   billingAddresses: BillingAddressConnection;
   /** Fetch a single business by ID */
   business?: Maybe<Business>;
+  /**  All availability slots across a business  */
+  businessAvailabilities: Array<ServiceAvailability>;
   /** Fetch a single business feedback by ID */
   businessFeedback?: Maybe<BusinessFeedback>;
   /** List business feedbacks with relay-style cursor pagination */
@@ -989,6 +1111,8 @@ export type Query = {
   serviceAppointment?: Maybe<ServiceAppointment>;
   /** List service appointments with relay-style cursor pagination */
   serviceAppointments: ServiceAppointmentConnection;
+  /**  All availability slots for a service (future slots only by default)  */
+  serviceAvailabilities: Array<ServiceAvailability>;
   /** Fetch a single service billing by ID */
   serviceBilling?: Maybe<ServiceBilling>;
   /** List service billings with relay-style cursor pagination */
@@ -1048,6 +1172,12 @@ export type QueryBillingAddressesArgs = {
 
 export type QueryBusinessArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryBusinessAvailabilitiesArgs = {
+  businessId: Scalars['ID']['input'];
+  includeAll?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 
@@ -1173,6 +1303,12 @@ export type QueryServiceAppointmentsArgs = {
   filter?: InputMaybe<ServiceAppointmentFilter>;
   first: Scalars['Int']['input'];
   sort?: InputMaybe<ServiceAppointmentSort>;
+};
+
+
+export type QueryServiceAvailabilitiesArgs = {
+  includeAll?: InputMaybe<Scalars['Boolean']['input']>;
+  serviceId: Scalars['ID']['input'];
 };
 
 
@@ -1336,6 +1472,8 @@ export type SalesInvoice = Node & {
   createdBy: Scalars['ID']['output'];
   /** Globally unique identifier */
   id: Scalars['ID']['output'];
+  /** The associated payment */
+  payment?: Maybe<Payment>;
   /** ID of the associated payment */
   paymentId: Scalars['ID']['output'];
   /** When the invoice was requested */
@@ -1380,6 +1518,8 @@ export type Service = Node & {
   __typename?: 'Service';
   /** URL to the service banner image */
   bannerImageUrl?: Maybe<Scalars['String']['output']>;
+  /** The owning business */
+  business?: Maybe<Business>;
   /** ID of the owning business */
   businessId: Scalars['ID']['output'];
   /** When the record was created */
@@ -1390,12 +1530,40 @@ export type Service = Node & {
   description?: Maybe<Scalars['String']['output']>;
   /** Globally unique identifier */
   id: Scalars['ID']['output'];
+  /** Maximum price of the service in PHP */
+  maxPrice?: Maybe<Scalars['Float']['output']>;
+  /** Metrics for this service */
+  metrics?: Maybe<ServiceMetric>;
+  /** Minimum price of the service in PHP */
+  minPrice?: Maybe<Scalars['Float']['output']>;
   /** Service name */
   name: Scalars['String']['output'];
+  /** Appointments for this service */
+  serviceAppointments?: Maybe<ServiceAppointmentConnection>;
+  /** Feedbacks for this service */
+  serviceFeedbacks?: Maybe<ServiceFeedbackConnection>;
+  /** Form configuration for this service */
+  serviceForm?: Maybe<ServiceForm>;
+  /** Landing page for this service */
+  servicePage?: Maybe<ServicePage>;
   /** Tags associated with this service */
   tags: Array<Tag>;
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+};
+
+
+/** A service offered by a business. */
+export type ServiceServiceAppointmentsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/** A service offered by a business. */
+export type ServiceServiceFeedbacksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
 };
 
 /** A customer's appointment booking for a service. */
@@ -1403,6 +1571,8 @@ export type ServiceAppointment = Node & {
   __typename?: 'ServiceAppointment';
   /** Appointment amount */
   amount: Scalars['Float']['output'];
+  /** Optional: the availability slot this appointment was booked through */
+  availabilityId?: Maybe<Scalars['ID']['output']>;
   /** ID of the business that owns the service */
   businessId: Scalars['ID']['output'];
   /** When the appointment was cancelled (null if active) */
@@ -1419,12 +1589,34 @@ export type ServiceAppointment = Node & {
   paidAt?: Maybe<Scalars['DateTime']['output']>;
   /** Appointment details payload (JSON) */
   payload: Scalars['JSON']['output'];
+  /** Payment links for this appointment */
+  paymentLinks?: Maybe<PaymentLinkConnection>;
+  /** Payments for this appointment */
+  payments?: Maybe<PaymentConnection>;
+  /** The service being booked */
+  service?: Maybe<Service>;
   /** ID of the service being booked */
   serviceId: Scalars['ID']['output'];
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+  /** The user who booked */
+  user?: Maybe<User>;
   /** ID of the user who booked */
   userId: Scalars['ID']['output'];
+};
+
+
+/** A customer's appointment booking for a service. */
+export type ServiceAppointmentPaymentLinksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/** A customer's appointment booking for a service. */
+export type ServiceAppointmentPaymentsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
 };
 
 export type ServiceAppointmentConnection = {
@@ -1454,6 +1646,27 @@ export enum ServiceAppointmentSortField {
   CreatedAtDesc = 'CREATED_AT_DESC'
 }
 
+/**
+ * A bookable time slot defined by a business owner for a specific service.
+ * Each slot has a maximum booking count (default 1 = exclusive single booking).
+ */
+export type ServiceAvailability = Node & {
+  __typename?: 'ServiceAvailability';
+  bookedCount: Scalars['Int']['output'];
+  businessId: Scalars['ID']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  createdBy: Scalars['ID']['output'];
+  durationMinutes: Scalars['Int']['output'];
+  id: Scalars['ID']['output'];
+  /**  True when the slot is full and cannot accept more bookings  */
+  isFull: Scalars['Boolean']['output'];
+  maxBookings: Scalars['Int']['output'];
+  scheduledAt: Scalars['DateTime']['output'];
+  service?: Maybe<Service>;
+  serviceId: Scalars['ID']['output'];
+  updatedAt: Scalars['DateTime']['output'];
+};
+
 /** A BIR-registered service billing linked to a payout statement. */
 export type ServiceBilling = Node & {
   __typename?: 'ServiceBilling';
@@ -1463,6 +1676,8 @@ export type ServiceBilling = Node & {
   id: Scalars['ID']['output'];
   /** Billing payload (JSON, BIR invoice data) */
   payload: Scalars['JSON']['output'];
+  /** The associated payout statement */
+  payoutStatement?: Maybe<PayoutStatement>;
   /** ID of the associated payout statement */
   payoutStatementId: Scalars['ID']['output'];
   /** When the record was last updated */
@@ -1519,6 +1734,8 @@ export type ServiceFeedback = Node & {
   payload: Scalars['JSON']['output'];
   /** Rating (1-5) */
   rating: Scalars['Int']['output'];
+  /** The service being reviewed */
+  service?: Maybe<Service>;
   /** ID of the service being reviewed */
   serviceId: Scalars['ID']['output'];
   /** When the record was last updated */
@@ -1574,6 +1791,8 @@ export type ServiceForm = Node & {
   id: Scalars['ID']['output'];
   /** Form configuration payload (JSON) */
   payload: Scalars['JSON']['output'];
+  /** The associated service */
+  service?: Maybe<Service>;
   /** ID of the associated service */
   serviceId: Scalars['ID']['output'];
   /** When the record was last updated */
@@ -1601,6 +1820,8 @@ export type ServiceMetric = Node & {
   createdAt: Scalars['DateTime']['output'];
   /** Globally unique identifier */
   id: Scalars['ID']['output'];
+  /** The associated service */
+  service?: Maybe<Service>;
   /** ID of the associated service */
   serviceId: Scalars['ID']['output'];
   /** Total number of reviews */
@@ -1632,6 +1853,8 @@ export type ServicePage = Node & {
   id: Scalars['ID']['output'];
   /** Page content payload (JSON) */
   payload: Scalars['JSON']['output'];
+  /** The associated service */
+  service?: Maybe<Service>;
   /** ID of the associated service */
   serviceId: Scalars['ID']['output'];
   /** When the record was last updated */
@@ -1672,8 +1895,12 @@ export type ServiceTag = Node & {
   createdBy: Scalars['ID']['output'];
   /** Globally unique identifier */
   id: Scalars['ID']['output'];
+  /** The associated service */
+  service?: Maybe<Service>;
   /** ID of the associated service */
   serviceId: Scalars['ID']['output'];
+  /** The associated tag */
+  tag?: Maybe<Tag>;
   /** ID of the associated tag */
   tagId: Scalars['ID']['output'];
   /** When the record was last updated */
@@ -1866,10 +2093,17 @@ export type UpdatePhoneNumberPayload = {
   success: Scalars['Boolean']['output'];
 };
 
+export type UpdateServiceAppointmentStatusPayload = {
+  __typename?: 'UpdateServiceAppointmentStatusPayload';
+  serviceAppointment: ServiceAppointment;
+};
+
 export type UpdateServiceInput = {
   bannerImageUrl?: InputMaybe<Scalars['String']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['ID']['input'];
+  maxPrice?: InputMaybe<Scalars['Float']['input']>;
+  minPrice?: InputMaybe<Scalars['Float']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -1904,6 +2138,7 @@ export type UpdateTodoPayload = {
 };
 
 export type UpdateUserInput = {
+  bannerImageUrl?: InputMaybe<Scalars['String']['input']>;
   firstName?: InputMaybe<Scalars['String']['input']>;
   lastName?: InputMaybe<Scalars['String']['input']>;
   middleName?: InputMaybe<Scalars['String']['input']>;
@@ -1942,6 +2177,14 @@ export type UpsertServicePagePayload = {
  */
 export type User = Node & {
   __typename?: 'User';
+  /** URL to the user's profile banner */
+  bannerImageUrl?: Maybe<Scalars['String']['output']>;
+  /** User's billing address */
+  billingAddress?: Maybe<BillingAddress>;
+  /** Business feedbacks by this user */
+  businessFeedbacks?: Maybe<BusinessFeedbackConnection>;
+  /** Businesses owned by this user */
+  businesses?: Maybe<BusinessConnection>;
   /** When the record was created */
   createdAt: Scalars['DateTime']['output'];
   /** User's first name */
@@ -1952,12 +2195,80 @@ export type User = Node & {
   lastName: Scalars['String']['output'];
   /** User's middle name */
   middleName?: Maybe<Scalars['String']['output']>;
+  /** Notifications for this user */
+  notifications?: Maybe<NotificationConnection>;
+  /** Payments made by this user */
+  payments?: Maybe<PaymentConnection>;
   /** URL to the user's profile picture */
   profilePictureUrl?: Maybe<Scalars['String']['output']>;
+  /** Service appointments by this user */
+  serviceAppointments?: Maybe<ServiceAppointmentConnection>;
+  /** Service feedbacks by this user */
+  serviceFeedbacks?: Maybe<ServiceFeedbackConnection>;
   /** Suffix (e.g. Jr., III) */
   suffix?: Maybe<Scalars['String']['output']>;
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+};
+
+
+/**
+ * User profile information.
+ * This is the application-level user record — NOT the Keycloak identity.
+ */
+export type UserBusinessFeedbacksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/**
+ * User profile information.
+ * This is the application-level user record — NOT the Keycloak identity.
+ */
+export type UserBusinessesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/**
+ * User profile information.
+ * This is the application-level user record — NOT the Keycloak identity.
+ */
+export type UserNotificationsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/**
+ * User profile information.
+ * This is the application-level user record — NOT the Keycloak identity.
+ */
+export type UserPaymentsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/**
+ * User profile information.
+ * This is the application-level user record — NOT the Keycloak identity.
+ */
+export type UserServiceAppointmentsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
+};
+
+
+/**
+ * User profile information.
+ * This is the application-level user record — NOT the Keycloak identity.
+ */
+export type UserServiceFeedbacksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first: Scalars['Int']['input'];
 };
 
 export type UserConnection = {

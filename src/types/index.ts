@@ -79,7 +79,8 @@ export interface Service {
   name: string;
   description?: string | null;
   bannerImageUrl?: string | null;
-  price?: number | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -154,6 +155,7 @@ export interface ServiceTag {
   id: string;
   serviceId: string;
   tagId: string;
+  tag?: Tag;
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;

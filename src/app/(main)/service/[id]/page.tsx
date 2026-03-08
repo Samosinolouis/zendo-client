@@ -158,7 +158,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
   const computeAmount = (): number => {
     // Start with base service price (defensive parse in case backend returns non-primitive)
-    const base = Number(service.price);
+    const base = Number(service.minPrice ?? service.maxPrice ?? 0);
     let total = Number.isFinite(base) ? base : 0;
     
     // Add any extra amounts from form options
@@ -233,9 +233,9 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
             </Link>
           </Button>
           <h1 className="text-2xl sm:text-3xl font-bold text-white">{service.name}</h1>
-          {service.price && (
+          {(service.minPrice ?? service.maxPrice) && (
             <div className="mt-2 text-lg font-semibold text-green-300">
-              ₱{parseFloat(service.price.toString()).toFixed(2)}
+              ₱{Number.parseFloat((service.minPrice ?? service.maxPrice ?? 0).toString()).toFixed(2)}
             </div>
           )}
           {avgRating !== null && (
@@ -468,9 +468,9 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
               <CardHeader className="border-b border-border">
                 <CardTitle>Book This Service</CardTitle>
                 <p className="text-sm text-muted-foreground">{business.name}</p>
-                {service.price && (
+                {(service.minPrice ?? service.maxPrice) && (
                   <p className="text-xl font-bold text-primary">
-                    {formatCurrency(parseFloat(service.price.toString()), "PHP")}
+                    {formatCurrency(Number.parseFloat((service.minPrice ?? service.maxPrice ?? 0).toString()), "PHP")}
                   </p>
                 )}
               </CardHeader>

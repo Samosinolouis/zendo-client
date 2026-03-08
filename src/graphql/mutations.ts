@@ -165,7 +165,8 @@ export const CREATE_SERVICE = /* GraphQL */ `
         name
         description
         bannerImageUrl
-        price
+        minPrice
+        maxPrice
         createdBy
         createdAt
         updatedAt
@@ -183,7 +184,8 @@ export const UPDATE_SERVICE = /* GraphQL */ `
         name
         description
         bannerImageUrl
-        price
+        minPrice
+        maxPrice
         createdBy
         createdAt
         updatedAt

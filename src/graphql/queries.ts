@@ -159,7 +159,8 @@ export const GET_SERVICE = /* GraphQL */ `
       name
       description
       bannerImageUrl
-      price
+      minPrice
+      maxPrice
       createdBy
       createdAt
       updatedAt
@@ -177,7 +178,8 @@ export const GET_SERVICES = /* GraphQL */ `
           name
           description
           bannerImageUrl
-          price
+          minPrice
+          maxPrice
           createdBy
           createdAt
           updatedAt
@@ -298,6 +300,10 @@ export const GET_SERVICE_TAGS_BY_SERVICE = /* GraphQL */ `
       id
       serviceId
       tagId
+      tag {
+        id
+        name
+      }
       createdBy
       createdAt
       updatedAt
