@@ -169,7 +169,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   }, [status, appUser?.id, user?.id, fetchBusinesses]);
 
   const isLoggedIn = status === "authenticated" && user !== null;
-  const isOwner = businesses.length > 0;
+  const isOwner = true;
 
   const login = useCallback(() => {
     signIn("keycloak", { callbackUrl: "/onboarding" });
