@@ -252,6 +252,10 @@ export const GET_SERVICE_APPOINTMENTS = /* GraphQL */ `
           amount
           currency
           payload
+          paidAt
+          canceledAt
+          approvedAt
+          rejectedAt
           createdBy
           createdAt
           updatedAt

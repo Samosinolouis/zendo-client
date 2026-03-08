@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_SERVICES, GET_SERVICE_APPOINTMENTS, GET_USER } from "@/graphql/queries";
-import { UPDATE_SERVICE_APPOINTMENT_STATUS } from "@/graphql/mutations";
+import { UPDATE_SERVICE_APPOINTMENT_STATUS, APPROVE_SERVICE_APPOINTMENT, REJECT_SERVICE_APPOINTMENT } from "@/graphql/mutations";
 import type { Service, ServiceAppointment, User, Connection } from "@/types";
 import { formatCurrency, formatDateTime, getInitials } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,7 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarCheck, Clock } from "lucide-react";
+import { CalendarCheck, Clock, Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const STATUS_OPTIONS = [
   { value: "pending",   label: "Pending" },
@@ -51,7 +52,7 @@ function aptScheduledAt(apt: ServiceAppointment): string | null {
   return (p?.scheduledAt as string) ?? null;
 }
 
-function CustomerCell({ userId }: { userId?: string }) {
+function CustomerCell({ userId }: { readonly userId?: string }) {
   const { data } = useQuery<{ user: User }>(GET_USER, { id: userId! }, { skip: !userId });
   const customer = data?.user ?? null;
   return (
@@ -71,7 +72,7 @@ function CustomerCell({ userId }: { userId?: string }) {
   );
 }
 
-function StatusCell({ apt, refetch }: { apt: ServiceAppointment; refetch: () => void }) {
+function StatusCell({ apt, refetch }: { readonly apt: ServiceAppointment; readonly refetch: () => void }) {
   const { mutate: updateStatus, loading } = useMutation<{
     updateServiceAppointmentStatus: { serviceAppointment: { id: string; payload: unknown } };
   }>(UPDATE_SERVICE_APPOINTMENT_STATUS, { onCompleted: refetch });
@@ -102,6 +103,57 @@ function StatusCell({ apt, refetch }: { apt: ServiceAppointment; refetch: () => 
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+function ApprovalCell({ apt, refetch }: { readonly apt: ServiceAppointment; readonly refetch: () => void }) {
+  const { mutate: approve, loading: approving } = useMutation<{
+    approveServiceAppointment: { serviceAppointment: { id: string; approvedAt: string } };
+  }>(APPROVE_SERVICE_APPOINTMENT, { onCompleted: refetch });
+
+  const { mutate: reject, loading: rejecting } = useMutation<{
+    rejectServiceAppointment: { serviceAppointment: { id: string; rejectedAt: string } };
+  }>(REJECT_SERVICE_APPOINTMENT, { onCompleted: refetch });
+
+  if (apt.rejectedAt) {
+    return (
+      <Badge variant="secondary" className="bg-red-100 text-red-800 text-xs font-medium">
+        Rejected
+      </Badge>
+    );
+  }
+
+  if (apt.approvedAt) {
+    return (
+      <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs font-medium">
+        Approved
+      </Badge>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50 hover:text-green-800"
+        disabled={approving || rejecting}
+        onClick={() => approve({ id: apt.id })}
+      >
+        <Check className="w-3 h-3 mr-1" />
+        Approve
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs text-red-700 border-red-200 hover:bg-red-50 hover:text-red-800"
+        disabled={approving || rejecting}
+        onClick={() => reject({ id: apt.id })}
+      >
+        <X className="w-3 h-3 mr-1" />
+        Reject
+      </Button>
+    </div>
   );
 }
 
@@ -136,20 +188,19 @@ export default function OwnerAppointmentsPage() {
 
   if (!user) return null;
 
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Appointments</h1>
-        <p className="text-muted-foreground mt-1">All bookings across your businesses</p>
-      </div>
-
-      {loading ? (
+  function renderContent() {
+    if (loading) {
+      return (
         <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-14 rounded-xl" />
+          {[0, 1, 2, 3].map((n) => (
+            <Skeleton key={n} className="h-14 rounded-xl" />
           ))}
         </div>
-      ) : allAppointments.length === 0 ? (
+      );
+    }
+
+    if (allAppointments.length === 0) {
+      return (
         <Card className="border-0 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <CalendarCheck className="w-12 h-12 text-muted-foreground/40 mb-4" />
@@ -157,49 +208,66 @@ export default function OwnerAppointmentsPage() {
             <p className="text-sm text-muted-foreground">Bookings will appear here once customers start booking.</p>
           </CardContent>
         </Card>
-      ) : (
-        <Card className="border-0 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Scheduled</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allAppointments.map((apt) => {
-                  const svc = svcMap[apt.serviceId];
-                  const scheduled = aptScheduledAt(apt);
-                  return (
-                    <TableRow key={apt.id}>
-                      <TableCell>
-                        <CustomerCell userId={apt.userId} />
-                      </TableCell>
-                      <TableCell className="text-sm">{svc?.name ?? "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Clock className="w-3.5 h-3.5" />
-                          {scheduled ? formatDateTime(scheduled) : "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-semibold text-sm">
-                        {formatCurrency(apt.amount, apt.currency)}
-                      </TableCell>
-                      <TableCell>
-                        <StatusCell apt={apt} refetch={refetch} />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
-      )}
+      );
+    }
+
+    return (
+      <Card className="border-0 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead>Customer</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Scheduled</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Approval</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {allAppointments.map((apt) => {
+                const svc = svcMap[apt.serviceId];
+                const scheduled = aptScheduledAt(apt);
+                return (
+                  <TableRow key={apt.id}>
+                    <TableCell>
+                      <CustomerCell userId={apt.userId} />
+                    </TableCell>
+                    <TableCell className="text-sm">{svc?.name ?? "—"}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Clock className="w-3.5 h-3.5" />
+                        {scheduled ? formatDateTime(scheduled) : "—"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-semibold text-sm">
+                      {formatCurrency(apt.amount, apt.currency)}
+                    </TableCell>
+                    <TableCell>
+                      <StatusCell apt={apt} refetch={refetch} />
+                    </TableCell>
+                    <TableCell>
+                      <ApprovalCell apt={apt} refetch={refetch} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Appointments</h1>
+        <p className="text-muted-foreground mt-1">All bookings across your businesses</p>
+      </div>
+
+      {renderContent()}
     </div>
   );
 }

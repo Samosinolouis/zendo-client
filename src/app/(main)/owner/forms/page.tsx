@@ -35,6 +35,8 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
+import type { GraphQLError } from "@/lib/graphql-client";
+import { useToast } from "@/providers/ToastProvider";
 
 import { GET_SERVICES } from "@/graphql/queries";
 
@@ -97,6 +99,16 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 
 import { cn } from "@/lib/utils";
+
+function resolveGqlError(err: GraphQLError): string {
+  const code = err.extensions?.code;
+  const messages: Record<string, string> = {
+    NOT_FOUND:         "Resource not found.",
+    UNAUTHORIZED:      "You are not authorised to do that.",
+    VALIDATION_ERROR:  "Invalid input. Please check your fields and try again.",
+  };
+  return (code && messages[String(code)]) ?? err.message ?? "Something went wrong.";
+}
 
 import {
 
@@ -1334,6 +1346,7 @@ function ServiceFormEditor({
 
     useQuery<{ serviceFormByService: ServiceForm | null }>(GET_SERVICE_FORM, { serviceId: service.id });
 
+  const { showSuccess, showError } = useToast();
 
 
   const [payload, setPayload] = useState<FormPayload>(emptyFormPayload());
@@ -1389,9 +1402,13 @@ function ServiceFormEditor({
 
 
 
-  const { mutate: upsert } = useMutation<{ upsertServiceForm: { serviceForm: ServiceForm } }>(UPSERT_SERVICE_FORM);
+  const { mutate: upsert } = useMutation<{ upsertServiceForm: { serviceForm: ServiceForm } }>(UPSERT_SERVICE_FORM, {
+    onError: (err) => showError(resolveGqlError(err)),
+  });
 
-  const { mutate: deleteForm } = useMutation<{ deleteServiceForm: { success: boolean } }>(DELETE_SERVICE_FORM);
+  const { mutate: deleteForm } = useMutation<{ deleteServiceForm: { success: boolean } }>(DELETE_SERVICE_FORM, {
+    onError: (err) => showError(resolveGqlError(err)),
+  });
 
 
 
@@ -1409,13 +1426,15 @@ function ServiceFormEditor({
 
       refetchForm();
 
+      showSuccess("Form saved.");
+
     } else {
 
       setSaveStatus("error");
 
     }
 
-  }, [service.id, upsert, refetchForm]);
+  }, [service.id, upsert, refetchForm, showSuccess]);
 
 
 
@@ -1511,19 +1530,25 @@ function ServiceFormEditor({
 
     if (!globalThis.confirm("Delete this form? This cannot be undone.")) return;
 
-    await deleteForm({ input: { serviceFormId: svcForm.id } });
+    const result = await deleteForm({ input: { serviceFormId: svcForm.id } });
 
-    const fresh = emptyFormPayload();
+    if (result) {
 
-    setPayload(fresh);
+      const fresh = emptyFormPayload();
 
-    payloadRef.current = fresh;
+      setPayload(fresh);
 
-    setIsDirty(false);
+      payloadRef.current = fresh;
 
-    setSaveStatus("idle");
+      setIsDirty(false);
 
-    refetchForm();
+      setSaveStatus("idle");
+
+      refetchForm();
+
+      showSuccess("Form deleted.");
+
+    }
 
   };
 

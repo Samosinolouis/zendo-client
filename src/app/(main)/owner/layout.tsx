@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import {
-  LayoutDashboard, Store, Wrench, CalendarDays, DollarSign, MessageSquare, AlertCircle, BookOpen, ClipboardList,
+  LayoutDashboard, Store, Wrench, CalendarDays, DollarSign, MessageSquare, AlertCircle, BookOpen, ClipboardList, CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +15,7 @@ const ownerNav = [
   { href: "/owner/pages",         label: "Pages",          icon: BookOpen },
   { href: "/owner/forms",        label: "Forms",          icon: ClipboardList },
   { href: "/owner/appointments", label: "Appointments",  icon: CalendarDays },
+  { href: "/owner/payments",     label: "Payments",      icon: CreditCard },
   { href: "/owner/payouts",      label: "Payouts",       icon: DollarSign },
   { href: "/owner/feedbacks",    label: "Feedbacks",     icon: MessageSquare },
 ];

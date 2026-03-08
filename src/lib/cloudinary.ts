@@ -52,6 +52,44 @@ export async function uploadToCloudinary(
   return res.json();
 }
 
+export interface CloudinaryRawUploadResult {
+  secure_url: string;
+  public_id: string;
+  resource_type: string;
+  format: string;
+  bytes: number;
+}
+
+export async function uploadPdfToCloudinary(
+  file: File,
+  folder = "zendo"
+): Promise<CloudinaryRawUploadResult> {
+  if (!isCloudinaryConfigured()) {
+    throw new Error(
+      "Cloudinary is not configured. " +
+        "Open .env.local and replace the placeholder values for " +
+        "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET."
+    );
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", UPLOAD_PRESET!);
+  formData.append("folder", folder);
+
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`,
+    { method: "POST", body: formData }
+  );
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message ?? "Cloudinary upload failed");
+  }
+
+  return res.json();
+}
+
 export function cloudinaryUrl(
   publicId: string,
   opts: { width?: number; height?: number; crop?: string; quality?: string } = {}

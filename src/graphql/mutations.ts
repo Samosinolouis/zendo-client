@@ -235,6 +235,30 @@ export const UPDATE_SERVICE_APPOINTMENT_STATUS = /* GraphQL */ `
   }
 `;
 
+export const APPROVE_SERVICE_APPOINTMENT = /* GraphQL */ `
+  mutation ApproveServiceAppointment($id: ID!) {
+    approveServiceAppointment(id: $id) {
+      serviceAppointment {
+        id
+        approvedAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const REJECT_SERVICE_APPOINTMENT = /* GraphQL */ `
+  mutation RejectServiceAppointment($id: ID!) {
+    rejectServiceAppointment(id: $id) {
+      serviceAppointment {
+        id
+        rejectedAt
+        updatedAt
+      }
+    }
+  }
+`;
+
 // ── Service Feedback ──────────────────────────────────────────
 
 export const CREATE_SERVICE_FEEDBACK = /* GraphQL */ `
@@ -375,6 +399,20 @@ export const REQUEST_SALES_INVOICE = /* GraphQL */ `
         requestedBy
         attachmentUrl
         createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const RESOLVE_SALES_INVOICE = /* GraphQL */ `
+  mutation ResolveSalesInvoice($input: ResolveSalesInvoiceInput!) {
+    resolveSalesInvoice(input: $input) {
+      salesInvoice {
+        id
+        resolvedAt
+        resolvedBy
+        attachmentUrl
         updatedAt
       }
     }

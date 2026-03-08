@@ -29,6 +29,8 @@ import {
 } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
+import type { GraphQLError } from "@/lib/graphql-client";
+import { useToast } from "@/providers/ToastProvider";
 import { GET_SERVICES, GET_SERVICE_PAGE } from "@/graphql/queries";
 import { UPSERT_SERVICE_PAGE, DELETE_SERVICE_PAGE } from "@/graphql/mutations";
 import { ImageUpload } from "@/components/ui/image-upload";
@@ -48,6 +50,16 @@ import {
   ExternalLink, Clock, Users, Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function resolveGqlError(err: GraphQLError): string {
+  const code = err.extensions?.code;
+  const messages: Record<string, string> = {
+    NOT_FOUND:         "Resource not found.",
+    UNAUTHORIZED:      "You are not authorised to do that.",
+    VALIDATION_ERROR:  "Invalid input. Please check your fields and try again.",
+  };
+  return (code && messages[code]) ?? err.message ?? "Something went wrong.";
+}
 import type {
   PageNode,
   PageNodeType,
@@ -908,6 +920,8 @@ function ServicePageEditor({ service, onBack }: { service: ServiceWithBiz; onBac
   const { data: pageData, loading: pageLoading, refetch: refetchPage } =
     useQuery<{ servicePageByService: ServicePage | null }>(GET_SERVICE_PAGE, { serviceId: service.id });
 
+  const { showSuccess, showError } = useToast();
+
   const [payload, setPayload] = useState<PagePayload>(emptyPagePayload(service.name));
   const [isDirty, setIsDirty]           = useState(false);
   const [previewMode, setPreviewMode]   = useState(false);
@@ -932,15 +946,19 @@ function ServicePageEditor({ service, onBack }: { service: ServiceWithBiz; onBac
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageData]);
 
-  const { mutate: upsert }     = useMutation<{ upsertServicePage: { servicePage: ServicePage } }>(UPSERT_SERVICE_PAGE);
-  const { mutate: deletePage } = useMutation<{ deleteServicePage: { success: boolean } }>(DELETE_SERVICE_PAGE);
+  const { mutate: upsert }     = useMutation<{ upsertServicePage: { servicePage: ServicePage } }>(UPSERT_SERVICE_PAGE, {
+    onError: (err) => showError(resolveGqlError(err)),
+  });
+  const { mutate: deletePage } = useMutation<{ deleteServicePage: { success: boolean } }>(DELETE_SERVICE_PAGE, {
+    onError: (err) => showError(resolveGqlError(err)),
+  });
 
   const handleSave = useCallback(async () => {
     setSaveStatus("saving");
     const result = await upsert({ input: { serviceId: service.id, payload: payloadRef.current } });
-    if (result) { setSaveStatus("saved"); setIsDirty(false); refetchPage(); }
+    if (result) { setSaveStatus("saved"); setIsDirty(false); refetchPage(); showSuccess("Page saved."); }
     else setSaveStatus("unsaved");
-  }, [service.id, upsert, refetchPage]);
+  }, [service.id, upsert, refetchPage, showSuccess]);
 
   const update = useCallback((updater: (p: PagePayload) => PagePayload) => {
     setPayload((prev) => updater(prev));
@@ -985,9 +1003,12 @@ function ServicePageEditor({ service, onBack }: { service: ServiceWithBiz; onBac
   );
   const handleDeletePage = async () => {
     if (!globalThis.confirm("Delete this page? This cannot be undone.")) return;
-    await deletePage({ input: { serviceId: service.id } });
-    setPayload(emptyPagePayload(service.name));
-    setIsDirty(false); setSaveStatus("saved"); refetchPage();
+    const result = await deletePage({ input: { serviceId: service.id } });
+    if (result) {
+      setPayload(emptyPagePayload(service.name));
+      setIsDirty(false); setSaveStatus("saved"); refetchPage();
+      showSuccess("Page deleted.");
+    }
   };
 
   return (

@@ -130,6 +130,10 @@ export interface ServiceAppointment {
   amount: number; // Float in API
   currency: string;
   payload: Record<string, unknown>; // { status, scheduledAt, formValues, ... }
+  paidAt?: string | null;
+  canceledAt?: string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -254,10 +258,60 @@ export interface PayoutStatement {
 
 // ── Service Billing ───────────────────────────────────────────
 
+// ── Service Billing — Invoice Payload Types ───────────────────
+
+export interface InvoiceLineItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+export interface SpecialBuyerInfo {
+  type: "SC" | "PWD" | "Athlete" | "SP" | "MOV";
+  idNumber: string;
+  name?: string;
+}
+
+export interface InvoiceData {
+  // Seller (Zendo)
+  sellerRegisteredName: string;
+  sellerTradeName?: string;
+  sellerTIN: string;
+  sellerBranchCode?: string;
+  sellerAddress: string;
+  // Invoice details
+  invoiceNumber: string;
+  serialNumber: string;
+  invoiceDate: string;
+  dueDate?: string;
+  startDate?: string;
+  endDate?: string;
+  // Buyer (Business)
+  buyerName: string;
+  buyerTIN?: string;
+  buyerAddress?: string;
+  // Line items & totals
+  items: InvoiceLineItem[];
+  subtotal: number;
+  discount?: number;
+  discountDescription?: string;
+  total: number;
+  // Special buyer
+  specialBuyer?: SpecialBuyerInfo;
+  // BIR/ATP permit details
+  atpNumber?: string;
+  atpDateIssued?: string;
+  ptuNumber?: string;
+  ptuDateIssued?: string;
+  birPermitNumber?: string;
+  approvedSerialNumbers?: string;
+}
+
 export interface ServiceBilling {
   id: string;
   payoutStatementId: string;
-  payload: Record<string, unknown>;
+  payload: InvoiceData;
   createdAt?: string;
   updatedAt?: string;
 }
