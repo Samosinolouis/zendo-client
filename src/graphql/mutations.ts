@@ -259,6 +259,18 @@ export const REJECT_SERVICE_APPOINTMENT = /* GraphQL */ `
   }
 `;
 
+export const CANCEL_SERVICE_APPOINTMENT = /* GraphQL */ `
+  mutation CancelServiceAppointment($id: ID!) {
+    cancelServiceAppointment(id: $id) {
+      serviceAppointment {
+        id
+        canceledAt
+        updatedAt
+      }
+    }
+  }
+`;
+
 // ── Service Feedback ──────────────────────────────────────────
 
 export const CREATE_SERVICE_FEEDBACK = /* GraphQL */ `

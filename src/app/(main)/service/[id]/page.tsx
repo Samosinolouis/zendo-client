@@ -495,17 +495,33 @@ export default function ServiceDetailPage({
   const handleConfirmBooking = async () => {
     setPaymentError(null);
     try {
+      const appointmentPayload = {
+        version: 1,
+        currency: formCurrency,
+        totalAmount: computeAmount(),
+        fields: fields.map((f) => ({
+          name: f.name,
+          label: f.label,
+          type: f.type,
+          value: isBooleanField(f)
+            ? formValues[f.name] === "true"
+            : (formValues[f.name] ?? ""),
+          amount: f.amount,
+        })),
+        meta: {
+          submittedAt: new Date().toISOString(),
+          clientVersion: "web-1.0.0",
+          ...(selectedSlotId ? { availabilityId: selectedSlotId } : {}),
+        },
+      };
+
       const result = await createAppointment({
         input: {
           serviceId: id,
           businessId: service.businessId,
           amount: computeAmount(),
           currency: formCurrency,
-          payload: {
-            formValues,
-            status: "pending",
-            scheduledAt: formValues["date"] || null,
-          },
+          payload: appointmentPayload,
           ...(selectedSlotId ? { availabilityId: selectedSlotId } : {}),
         },
       });

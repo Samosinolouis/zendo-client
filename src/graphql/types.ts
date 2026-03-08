@@ -26,6 +26,11 @@ export type AddServiceTagPayload = {
   serviceTag: ServiceTag;
 };
 
+export type ApproveServiceAppointmentPayload = {
+  __typename?: 'ApproveServiceAppointmentPayload';
+  serviceAppointment: ServiceAppointment;
+};
+
 /** A user's billing address. Each user has at most one billing address. */
 export type BillingAddress = Node & {
   __typename?: 'BillingAddress';
@@ -466,6 +471,8 @@ export type Mutation = {
   _empty?: Maybe<Scalars['String']['output']>;
   /** Add a tag to a service (service owner only) */
   addServiceTag: AddServiceTagPayload;
+  /** Approve a service appointment — only callable by the business owner */
+  approveServiceAppointment: ApproveServiceAppointmentPayload;
   /** Cancel a payment link (owner only) */
   cancelPaymentLink: CancelPaymentLinkPayload;
   /** Cancel a service appointment (requires authentication) */
@@ -507,6 +514,8 @@ export type Mutation = {
    * and optionally a business in a single atomic operation.
    */
   processOnboarding: ProcessOnboardingPayload;
+  /** Reject a service appointment — only callable by the business owner */
+  rejectServiceAppointment: RejectServiceAppointmentPayload;
   /** Remove a tag from a service (service owner only) */
   removeServiceTag: RemoveServiceTagPayload;
   /** Request a sales invoice for a payment (customer only) */
@@ -525,8 +534,6 @@ export type Mutation = {
   updatePhoneNumber: UpdatePhoneNumberPayload;
   /** Update a service (business owner only) */
   updateService: UpdateServicePayload;
-  /** Update appointment status — only callable by the business owner */
-  updateServiceAppointmentStatus: UpdateServiceAppointmentStatusPayload;
   /** Update an existing tag */
   updateTag: UpdateTagPayload;
   /** Update an existing todo (owner only) */
@@ -542,6 +549,11 @@ export type Mutation = {
 
 export type MutationAddServiceTagArgs = {
   input: AddServiceTagInput;
+};
+
+
+export type MutationApproveServiceAppointmentArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -640,6 +652,11 @@ export type MutationProcessOnboardingArgs = {
 };
 
 
+export type MutationRejectServiceAppointmentArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationRemoveServiceTagArgs = {
   input: RemoveServiceTagInput;
 };
@@ -682,12 +699,6 @@ export type MutationUpdatePhoneNumberArgs = {
 
 export type MutationUpdateServiceArgs = {
   input: UpdateServiceInput;
-};
-
-
-export type MutationUpdateServiceAppointmentStatusArgs = {
-  id: Scalars['ID']['input'];
-  status: Scalars['String']['input'];
 };
 
 
@@ -1384,6 +1395,11 @@ export type QueryUsersArgs = {
   sort?: InputMaybe<UserSort>;
 };
 
+export type RejectServiceAppointmentPayload = {
+  __typename?: 'RejectServiceAppointmentPayload';
+  serviceAppointment: ServiceAppointment;
+};
+
 export type RemoveServiceTagInput = {
   id: Scalars['ID']['input'];
 };
@@ -2023,11 +2039,6 @@ export type UpdatePhoneNumberInput = {
 export type UpdatePhoneNumberPayload = {
   __typename?: 'UpdatePhoneNumberPayload';
   success: Scalars['Boolean']['output'];
-};
-
-export type UpdateServiceAppointmentStatusPayload = {
-  __typename?: 'UpdateServiceAppointmentStatusPayload';
-  serviceAppointment: ServiceAppointment;
 };
 
 export type UpdateServiceInput = {

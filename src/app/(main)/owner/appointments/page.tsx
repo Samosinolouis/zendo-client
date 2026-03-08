@@ -1,12 +1,15 @@
-"use client";
+﻿"use client";
 
 import { useMemo } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_SERVICES, GET_SERVICE_APPOINTMENTS, GET_USER } from "@/graphql/queries";
-import { UPDATE_SERVICE_APPOINTMENT_STATUS, APPROVE_SERVICE_APPOINTMENT, REJECT_SERVICE_APPOINTMENT } from "@/graphql/mutations";
+import {
+  APPROVE_SERVICE_APPOINTMENT,
+  REJECT_SERVICE_APPOINTMENT,
+} from "@/graphql/mutations";
 import type { Service, ServiceAppointment, User, Connection } from "@/types";
-import { formatCurrency, formatDateTime, getInitials } from "@/lib/utils";
+import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,36 +23,85 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { CalendarCheck, Clock, Check, X } from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { CalendarCheck, Check, X, Eye, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const STATUS_OPTIONS = [
-  { value: "pending",   label: "Pending" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "done",      label: "Done" },
-  { value: "cancelled", label: "Cancelled" },
-];
+// ── Status helpers ─────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, string> = {
+type AptStatus = "paid" | "approved" | "rejected" | "cancelled" | "pending";
+
+function getStatus(apt: ServiceAppointment): AptStatus {
+  if (apt.canceledAt) return "cancelled";
+  if (apt.approvedAt) return "approved";
+  if (apt.rejectedAt) return "rejected";
+  if (apt.paidAt) return "paid";
+  return "pending";
+}
+
+const STATUS_BADGE: Record<AptStatus, string> = {
+  paid:      "bg-blue-100 text-blue-800",
+  approved:  "bg-green-100 text-green-800",
+  rejected:  "bg-red-100 text-red-800",
+  cancelled: "bg-gray-100 text-gray-700",
   pending:   "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-blue-100 text-blue-800",
-  done:      "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
 };
 
-function aptStatus(apt: ServiceAppointment): string {
-  const p = apt.payload as Record<string, unknown> | null;
-  return (p?.status as string) ?? "pending";
+const STATUS_LABEL: Record<AptStatus, string> = {
+  paid:      "Paid",
+  approved:  "Approved",
+  rejected:  "Rejected",
+  cancelled: "Cancelled",
+  pending:   "Pending",
+};
+
+// ── Payload field shape ────────────────────────────────────────
+
+interface AppointmentFieldEntry {
+  name: string;
+  label: string;
+  type: string;
+  value: unknown;
+  amount: number;
 }
-function aptScheduledAt(apt: ServiceAppointment): string | null {
-  const p = apt.payload as Record<string, unknown> | null;
-  return (p?.scheduledAt as string) ?? null;
+
+interface AppointmentPayload {
+  version?: number;
+  currency?: string;
+  totalAmount?: number;
+  fields?: AppointmentFieldEntry[];
+  meta?: {
+    submittedAt?: string;
+    clientVersion?: string;
+    availabilityId?: string;
+  };
+}
+
+function parseAptPayload(raw: Record<string, unknown> | null | undefined): AppointmentPayload {
+  if (!raw) return {};
+  return {
+    version:     typeof raw.version === "number" ? raw.version : undefined,
+    currency:    typeof raw.currency === "string" ? raw.currency : undefined,
+    totalAmount: typeof raw.totalAmount === "number" ? raw.totalAmount : undefined,
+    fields:      Array.isArray(raw.fields) ? (raw.fields as AppointmentFieldEntry[]) : [],
+    meta:        raw.meta && typeof raw.meta === "object" ? (raw.meta as AppointmentPayload["meta"]) : undefined,
+  };
+}
+
+// ── Customer cell ──────────────────────────────────────────────
+
+function formatFieldValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value || "—";
+  if (typeof value === "number") return String(value);
+  return "—";
 }
 
 function CustomerCell({ userId }: { readonly userId?: string }) {
@@ -63,50 +115,24 @@ function CustomerCell({ userId }: { readonly userId?: string }) {
           {customer ? getInitials(customer.firstName, customer.lastName) : "?"}
         </AvatarFallback>
       </Avatar>
-      <div>
-        <p className="text-sm font-medium text-foreground">
-          {customer ? `${customer.firstName} ${customer.lastName}` : "Guest"}
-        </p>
-      </div>
+      <p className="text-sm font-medium text-foreground">
+        {customer ? `${customer.firstName} ${customer.lastName}` : "Guest"}
+      </p>
     </div>
   );
 }
 
-function StatusCell({ apt, refetch }: { readonly apt: ServiceAppointment; readonly refetch: () => void }) {
-  const { mutate: updateStatus, loading } = useMutation<{
-    updateServiceAppointmentStatus: { serviceAppointment: { id: string; payload: unknown } };
-  }>(UPDATE_SERVICE_APPOINTMENT_STATUS, { onCompleted: refetch });
+// ── Actions cell ───────────────────────────────────────────────
 
-  const current = aptStatus(apt);
+function ActionsCell({
+  apt,
+  refetch,
+}: {
+  readonly apt: ServiceAppointment;
+  readonly refetch: () => void;
+}) {
+  const status = getStatus(apt);
 
-  return (
-    <Select
-      value={current}
-      disabled={loading}
-      onValueChange={(val) => updateStatus({ id: apt.id, status: val })}
-    >
-      <SelectTrigger className="w-32 h-7 text-xs border-0 shadow-none p-0">
-        <SelectValue>
-          <Badge
-            variant="secondary"
-            className={`capitalize text-xs font-medium ${STATUS_COLORS[current] ?? "bg-muted text-muted-foreground"}`}
-          >
-            {current}
-          </Badge>
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {STATUS_OPTIONS.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value} className="text-sm">
-            {opt.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function ApprovalCell({ apt, refetch }: { readonly apt: ServiceAppointment; readonly refetch: () => void }) {
   const { mutate: approve, loading: approving } = useMutation<{
     approveServiceAppointment: { serviceAppointment: { id: string; approvedAt: string } };
   }>(APPROVE_SERVICE_APPOINTMENT, { onCompleted: refetch });
@@ -115,47 +141,149 @@ function ApprovalCell({ apt, refetch }: { readonly apt: ServiceAppointment; read
     rejectServiceAppointment: { serviceAppointment: { id: string; rejectedAt: string } };
   }>(REJECT_SERVICE_APPOINTMENT, { onCompleted: refetch });
 
-  if (apt.rejectedAt) {
-    return (
-      <Badge variant="secondary" className="bg-red-100 text-red-800 text-xs font-medium">
-        Rejected
-      </Badge>
-    );
-  }
+  const payload = parseAptPayload(apt.payload);
 
-  if (apt.approvedAt) {
-    return (
-      <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs font-medium">
-        Approved
-      </Badge>
-    );
-  }
+  // Final states show only the details button
+  const isFinal = status === "approved" || status === "rejected" || status === "cancelled";
+  const busy = approving || rejecting;
 
   return (
     <div className="flex items-center gap-1.5">
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-7 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50 hover:text-green-800"
-        disabled={approving || rejecting}
-        onClick={() => approve({ id: apt.id })}
-      >
-        <Check className="w-3 h-3 mr-1" />
-        Approve
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-7 px-2 text-xs text-red-700 border-red-200 hover:bg-red-50 hover:text-red-800"
-        disabled={approving || rejecting}
-        onClick={() => reject({ id: apt.id })}
-      >
-        <X className="w-3 h-3 mr-1" />
-        Reject
-      </Button>
+      {/* Details dialog */}
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1">
+            <Eye className="w-3 h-3" />
+            Details
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Appointment Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            {/* Status row */}
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Status</span>
+              <Badge
+                variant="secondary"
+                className={`capitalize text-xs font-medium ${STATUS_BADGE[status]}`}
+              >
+                {STATUS_LABEL[status]}
+              </Badge>
+            </div>
+
+            {/* Timestamps */}
+            {apt.paidAt && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Paid at</span>
+                <span>{formatDate(apt.paidAt)}</span>
+              </div>
+            )}
+            {apt.approvedAt && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Approved at</span>
+                <span>{formatDate(apt.approvedAt)}</span>
+              </div>
+            )}
+            {apt.rejectedAt && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Rejected at</span>
+                <span>{formatDate(apt.rejectedAt)}</span>
+              </div>
+            )}
+            {apt.canceledAt && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Cancelled at</span>
+                <span>{formatDate(apt.canceledAt)}</span>
+              </div>
+            )}
+
+            <Separator />
+
+            {/* Pricing */}
+            <div className="flex items-center justify-between font-semibold">
+              <span>Total Amount</span>
+              <span>{formatCurrency(apt.amount, apt.currency)}</span>
+            </div>
+
+            {/* Form fields */}
+            {payload.fields && payload.fields.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <p className="font-semibold text-foreground">Form Responses</p>
+                  {payload.fields.map((field) => (
+                    <div key={field.name} className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground">{field.label}</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                          {field.type}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-foreground">
+                          {formatFieldValue(field.value)}
+                        </p>
+                        {field.amount > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            +{formatCurrency(field.amount, apt.currency)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Meta */}
+            {payload.meta?.submittedAt && (
+              <>
+                <Separator />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Submitted</span>
+                  <span>{formatDate(payload.meta.submittedAt)}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transition actions — only for Paid status */}
+      {status === "paid" && (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50 hover:text-green-800"
+            disabled={busy}
+            onClick={() => approve({ id: apt.id })}
+          >
+            {approving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs text-red-700 border-red-200 hover:bg-red-50 hover:text-red-800"
+            disabled={busy}
+            onClick={() => reject({ id: apt.id })}
+          >
+            {rejecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+          </Button>
+        </>
+      )}
+
+      {/* Final state tooltip hints */}
+      {isFinal && (
+        <span className="text-xs text-muted-foreground italic">Final</span>
+      )}
     </div>
   );
 }
+
+// ── Main page ──────────────────────────────────────────────────
 
 export default function OwnerAppointmentsPage() {
   const { user, businesses } = useAuth();
@@ -178,7 +306,9 @@ export default function OwnerAppointmentsPage() {
 
   const serviceIds = useMemo(() => ownerServices.map((s) => s.id), [ownerServices]);
 
-  const { data: aptData, loading, refetch } = useQuery<{ serviceAppointments: Connection<ServiceAppointment> }>(
+  const { data: aptData, loading, refetch } = useQuery<{
+    serviceAppointments: Connection<ServiceAppointment>;
+  }>(
     GET_SERVICE_APPOINTMENTS, { first: 500 }, { skip: serviceIds.length === 0 }
   );
   const allAppointments = useMemo(() => {
@@ -205,7 +335,9 @@ export default function OwnerAppointmentsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <CalendarCheck className="w-12 h-12 text-muted-foreground/40 mb-4" />
             <p className="text-lg font-medium text-foreground mb-1">No appointments yet</p>
-            <p className="text-sm text-muted-foreground">Bookings will appear here once customers start booking.</p>
+            <p className="text-sm text-muted-foreground">
+              Bookings will appear here once customers start booking.
+            </p>
           </CardContent>
         </Card>
       );
@@ -219,36 +351,36 @@ export default function OwnerAppointmentsPage() {
               <TableRow className="bg-muted/50">
                 <TableHead>Customer</TableHead>
                 <TableHead>Service</TableHead>
-                <TableHead>Scheduled</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Approval</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {allAppointments.map((apt) => {
                 const svc = svcMap[apt.serviceId];
-                const scheduled = aptScheduledAt(apt);
+                const status = getStatus(apt);
                 return (
                   <TableRow key={apt.id}>
                     <TableCell>
                       <CustomerCell userId={apt.userId} />
                     </TableCell>
-                    <TableCell className="text-sm">{svc?.name ?? "—"}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <Clock className="w-3.5 h-3.5" />
-                        {scheduled ? formatDateTime(scheduled) : "—"}
-                      </div>
+                    <TableCell className="text-sm text-foreground">
+                      {svc?.name ?? "—"}
                     </TableCell>
                     <TableCell className="font-semibold text-sm">
                       {formatCurrency(apt.amount, apt.currency)}
                     </TableCell>
                     <TableCell>
-                      <StatusCell apt={apt} refetch={refetch} />
+                      <Badge
+                        variant="secondary"
+                        className={`capitalize text-xs font-medium ${STATUS_BADGE[status]}`}
+                      >
+                        {STATUS_LABEL[status]}
+                      </Badge>
                     </TableCell>
                     <TableCell>
-                      <ApprovalCell apt={apt} refetch={refetch} />
+                      <ActionsCell apt={apt} refetch={refetch} />
                     </TableCell>
                   </TableRow>
                 );
