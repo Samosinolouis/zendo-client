@@ -6,16 +6,19 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import {
   GET_SERVICE, GET_BUSINESS, GET_SERVICE_FEEDBACKS, GET_USER,
+  GET_SERVICE_PAGE, GET_SERVICE_FORM, GET_SERVICE_AVAILABILITIES,
 } from "@/graphql/queries";
-import { GET_SERVICE_PAGE, GET_SERVICE_FORM, GET_SERVICE_AVAILABILITIES } from "@/graphql/queries";
 import { CREATE_SERVICE_APPOINTMENT, CREATE_PAYMENT_LINK, CREATE_SERVICE_FEEDBACK } from "@/graphql/mutations";
 import type { Service, Business, ServiceFeedback, ServiceForm, ServicePage, ServiceAvailability, Connection } from "@/types";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import {
-  ArrowLeft, Star, CalendarDays, CreditCard, CheckCircle2,
+  ArrowLeft, Star, CalendarDays, CheckCircle2,
   AlertCircle, BookOpen, MessageCircle,
-  ChevronRight, Loader2, Clock,
+  Loader2, Clock,
 } from "lucide-react";
+import { parsePagePayload } from "@/graphql/page-nodes";
+import { parseFormPayload, isOptionsField, isBooleanField } from "@/graphql/form";
+import { NodePreview } from "@/app/(main)/owner/pages/page";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,20 +32,120 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
+import type { FormField } from "@/graphql/form";
 
-/* ── Form field shape stored inside ServiceForm.payload ─────── */
-
-interface FormField {
-  id: string;
-  name: string;
-  type: "text" | "number" | "date" | "select" | "textarea" | "checkbox";
-  description?: string;
-  required?: boolean;
-  options?: { label: string; value: string; amount?: number; currency?: string }[];
+// ── Per-field input renderer ──────────────────────────────────
+function FormFieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  readonly field: FormField;
+  readonly value: string;
+  readonly onChange: (v: string) => void;
+}) {
+  if (isOptionsField(field)) {
+    if (field.type === "select") {
+      return (
+        <Select value={value || ""} onValueChange={onChange}>
+          <SelectTrigger>
+            <SelectValue placeholder={field.placeholder ?? "Select…"} />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+    // radio
+    return (
+      <div className="space-y-1">
+        {field.options.map((opt) => (
+          <label key={opt.value} className="flex items-center gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name={field.name}
+              value={opt.value}
+              checked={value === opt.value}
+              onChange={() => onChange(opt.value)}
+              className="accent-primary"
+            />
+            {opt.label}
+          </label>
+        ))}
+      </div>
+    );
+  }
+  if (isBooleanField(field)) {
+    return (
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={`field-${field.name}`}
+          checked={value === "true"}
+          onCheckedChange={(checked) => onChange(checked ? "true" : "false")}
+        />
+        <Label htmlFor={`field-${field.name}`} className="font-normal">{field.label}</Label>
+      </div>
+    );
+  }
+  if (field.type === "date") {
+    return (
+      <Input type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} />
+    );
+  }
+  if (field.type === "textarea") {
+    return (
+      <Textarea
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={field.placeholder}
+        rows={(field as { rows?: number }).rows ?? 3}
+      />
+    );
+  }
+  if (field.type === "number") {
+    return (
+      <Input
+        type="number"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={field.placeholder}
+      />
+    );
+  }
+  if (field.type === "file") {
+    return (
+      <Input
+        type="file"
+        accept={(field as { accept?: string }).accept}
+        onChange={(e) => onChange(e.target.files?.[0]?.name ?? "")}
+      />
+    );
+  }
+  if (field.type === "password") {
+    return (
+      <Input
+        type="password"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={field.placeholder}
+      />
+    );
+  }
+  // text (default)
+  return (
+    <Input
+      type="text"
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={field.placeholder}
+    />
+  );
 }
 
-export default function ServiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function ServiceDetailPage({ params }: { readonly params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { isLoggedIn } = useAuth();
 
@@ -59,8 +162,11 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const { data: formData } = useQuery<{ serviceFormByService: ServiceForm | null }>(
     GET_SERVICE_FORM, { serviceId: id }
   );
-  const formPayload = formData?.serviceFormByService?.payload as { fields?: FormField[] } | null;
-  const fields: FormField[] = formPayload?.fields ?? [];
+  const parsedForm = parseFormPayload(
+    formData?.serviceFormByService?.payload as Record<string, unknown> | null,
+  );
+  const fields = parsedForm.fields;
+  const formCurrency = parsedForm.currency;
 
   const { data: pageData } = useQuery<{ servicePageByService: ServicePage | null }>(
     GET_SERVICE_PAGE, { serviceId: id }
@@ -70,26 +176,15 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
     GET_SERVICE_AVAILABILITIES, { serviceId: id, includeAll: false }, { skip: !id }
   );
   const availableSlots = availData?.serviceAvailabilities?.filter((s) => !s.isFull) ?? [];
-  type BlogBlock =
-    | { id: string; type: "heading";   level: 2 | 3; text: string }
-    | { id: string; type: "paragraph"; text: string }
-    | { id: string; type: "image";     url: string; caption: string }
-    | { id: string; type: "list";      items: string[] }
-    | { id: string; type: "divider" }
-    | { id: string; type: "callout";   text: string };
-  const blogPayload = pageData?.servicePageByService?.payload as {
-    title?: string;
-    subtitle?: string;
-    bannerImageUrl?: string;
-    blocks?: BlogBlock[];
-    tags?: string[];
-    status?: string;
-  } | null;
-  const blogBlocks   = blogPayload?.blocks   ?? [];
-  const blogTitle    = blogPayload?.title    ?? "";
-  const blogSubtitle = blogPayload?.subtitle ?? "";
-  const blogTags     = blogPayload?.tags     ?? [];
-  const blogBanner   = blogPayload?.bannerImageUrl ?? "";
+  const blogPayload  = parsePagePayload(
+    pageData?.servicePageByService?.payload as Record<string, unknown> | null,
+    service?.name ?? "",
+  );
+  const blogNodes    = blogPayload.content;
+  const blogTitle    = blogPayload.title;
+  const blogSubtitle = blogPayload.subtitle;
+  const blogTags     = blogPayload.tags;
+  const blogBanner   = blogPayload.bannerImageUrl;
 
   const { data: fbData, refetch: refetchFeedbacks } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
     GET_SERVICE_FEEDBACKS, { first: 100, filter: { serviceId: id } }
@@ -115,7 +210,6 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [bookingStep, setBookingStep] = useState<"details" | "review" | "payment" | "confirmed">("details");
-  const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   /* review form state */
@@ -152,27 +246,13 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
   /* ── Helpers ─────────────────────────────────────────────── */
 
-  const handleFieldChange = (fieldId: string, value: string) => {
-    setFormValues((prev) => ({ ...prev, [fieldId]: value }));
+  const handleFieldChange = (fieldName: string, value: string) => {
+    setFormValues((prev) => ({ ...prev, [fieldName]: value }));
   };
 
-  const computeAmount = (): number => {
-    // Start with base service price (defensive parse in case backend returns non-primitive)
-    const base = Number(service.minPrice ?? service.maxPrice ?? 0);
-    let total = Number.isFinite(base) ? base : 0;
-    
-    // Add any extra amounts from form options
-    for (const field of fields) {
-      if (field.type === "select" && field.options) {
-        const selected = field.options.find((o) => o.value === formValues[field.id]);
-        const optionAmount = Number(selected?.amount ?? 0);
-        if (Number.isFinite(optionAmount)) total += optionAmount;
-      }
-    }
-
-    // Ensure mutation always receives a valid numeric amount.
-    return Number.isFinite(total) ? total : 0;
-  };
+  // totalAmount = SUM(field.amount for all fields), as per Dynamic Booking Form Schema v1.
+  // Options carry no pricing; per-option adjustments are handled by backend plugins.
+  const computeAmount = (): number => parsedForm.totalAmount;
 
   const handleSubmitBooking = () => setBookingStep("review");
 
@@ -185,7 +265,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           serviceId: id,
           businessId: service.businessId,
           amount,
-          currency: "PHP",
+          currency: formCurrency,
           payload: { formValues, status: "pending", scheduledAt: formValues["date"] || null },
           ...(selectedSlotId ? { availabilityId: selectedSlotId } : {}),
         },
@@ -193,7 +273,6 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       const aptId = result?.createServiceAppointment?.serviceAppointment?.id;
       if (!aptId) throw new Error("Failed to create appointment.");
 
-      setAppointmentId(aptId);
       setBookingStep("payment"); // show redirecting state
 
       const payResult = await createPaymentLink({
@@ -201,7 +280,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
       });
       const link = payResult?.createPaymentLink?.paymentLink;
       if (link?.redirectUrl) {
-        window.location.href = link.redirectUrl;
+        globalThis.location.href = link.redirectUrl;
       } else {
         throw new Error("Payment provider did not return a redirect URL.");
       }
@@ -241,12 +320,12 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
           {avgRating !== null && (
             <div className="flex items-center gap-2 mt-2">
               <div className="flex items-center gap-0.5">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className={`w-4 h-4 ${i < Math.round(avgRating) ? "fill-amber-400 text-amber-400" : "text-white/30"}`} />
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star key={n} className={`w-4 h-4 ${n <= Math.round(avgRating) ? "fill-amber-400 text-amber-400" : "text-white/30"}`} />
                 ))}
               </div>
               <span className="text-white/80 text-sm">
-                {avgRating.toFixed(1)} ({feedbacks.length} review{feedbacks.length !== 1 ? "s" : ""})
+                {avgRating.toFixed(1)} ({feedbacks.length} review{feedbacks.length === 1 ? "" : "s"})
               </span>
             </div>
           )}
@@ -294,39 +373,8 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                   </Card>
                 )}
 
-                {blogBlocks.map((block) => (
-                  <div key={block.id}>
-                    {block.type === "heading" && (
-                      block.level === 2
-                        ? <h2 className="text-2xl font-bold text-foreground mt-2">{block.text}</h2>
-                        : <h3 className="text-xl font-semibold text-foreground mt-2">{block.text}</h3>
-                    )}
-                    {block.type === "paragraph" && (
-                      <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{block.text}</p>
-                    )}
-                    {block.type === "image" && block.url && (
-                      <figure className="space-y-1">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={block.url} alt={block.caption || ""} className="rounded-lg w-full h-auto" />
-                        {block.caption && (
-                          <figcaption className="text-sm text-muted-foreground text-center">{block.caption}</figcaption>
-                        )}
-                      </figure>
-                    )}
-                    {block.type === "list" && (
-                      <ul className="list-disc list-inside space-y-1">
-                        {block.items.filter(Boolean).map((item, i) => (
-                          <li key={i} className="text-muted-foreground">{item}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {block.type === "divider" && <hr className="border-border my-2" />}
-                    {block.type === "callout" && (
-                      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-                        <p className="text-base whitespace-pre-wrap">{block.text}</p>
-                      </div>
-                    )}
-                  </div>
+                {blogNodes.map((node) => (
+                  <NodePreview key={node.id} node={node} />
                 ))}
 
                 <Card>
@@ -477,15 +525,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
 
               {bookingStep === "details" && (
                 <CardContent className="p-6 space-y-5">
-                  {!isLoggedIn ? (
-                    <div className="text-center py-4">
-                      <AlertCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                      <p className="text-sm text-muted-foreground mb-3">Sign in to book an appointment</p>
-                      <Button variant="outline" size="sm" onClick={() => signIn("keycloak")}>
-                        Sign in
-                      </Button>
-                    </div>
-                  ) : (
+                  {isLoggedIn ? (
                     <>
                       {/* ── Slot picker (only shown when service has availability slots) ── */}
                       {availableSlots.length > 0 && (
@@ -522,60 +562,19 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                       )}
 
                       {fields.map((field) => (
-                        <div key={field.id} className="space-y-2">
-                          <Label>{field.name}</Label>
-                          {field.description && (
-                            <p className="text-xs text-muted-foreground">{field.description}</p>
+                        <div key={field.name} className="space-y-2">
+                          <Label>
+                            {field.label}
+                            {field.required && <span className="text-destructive ml-0.5">*</span>}
+                          </Label>
+                          {field.tooltip && (
+                            <p className="text-xs text-muted-foreground">{field.tooltip}</p>
                           )}
-                          {field.type === "select" && field.options && field.options.length > 0 ? (
-                            <Select
-                              value={formValues[field.id] || ""}
-                              onValueChange={(val) => handleFieldChange(field.id, val)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {field.options.map((opt) => (
-                                  <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                    {opt.amount ? ` (${formatCurrency(opt.amount, opt.currency ?? "PHP")})` : ""}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : field.type === "date" ? (
-                            <Input
-                              type="date"
-                              value={formValues[field.id] || ""}
-                              onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                            />
-                          ) : field.type === "textarea" ? (
-                            <Textarea
-                              value={formValues[field.id] || ""}
-                              onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                              rows={3}
-                            />
-                          ) : field.type === "checkbox" ? (
-                            <div className="flex items-center gap-2">
-                              <Checkbox
-                                id={`field-${field.id}`}
-                                checked={formValues[field.id] === "true"}
-                                onCheckedChange={(checked) =>
-                                  handleFieldChange(field.id, checked ? "true" : "false")
-                                }
-                              />
-                              <Label htmlFor={`field-${field.id}`} className="font-normal">
-                                {field.name}
-                              </Label>
-                            </div>
-                          ) : (
-                            <Input
-                              type={field.type === "number" ? "number" : "text"}
-                              value={formValues[field.id] || ""}
-                              onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                            />
-                          )}
+                          <FormFieldInput
+                            field={field}
+                            value={formValues[field.name] ?? ""}
+                            onChange={(v) => handleFieldChange(field.name, v)}
+                          />
                         </div>
                       ))}
 
@@ -592,6 +591,14 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                         Continue to Review
                       </Button>
                     </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <AlertCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground mb-3">Sign in to book an appointment</p>
+                      <Button variant="outline" size="sm" onClick={() => signIn("keycloak")}>
+                        Sign in
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               )}
@@ -623,12 +630,12 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                           </div>
                         );
                       })()}
-                      {Object.entries(formValues).map(([fieldId, value]) => {
-                        const field = fields.find((f) => f.id === fieldId);
+                      {Object.entries(formValues).map(([fieldName, value]) => {
+                        const field = fields.find((f) => f.name === fieldName);
                         if (!value || !field) return null;
                         return (
-                          <div key={fieldId} className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">{field.name}</span>
+                          <div key={fieldName} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{field.label}</span>
                             <span className="text-foreground">{value}</span>
                           </div>
                         );
@@ -636,7 +643,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                       {computeAmount() > 0 && (
                         <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2">
                           <span>Total</span>
-                          <span>{formatCurrency(computeAmount(), "PHP")}</span>
+                          <span>{formatCurrency(computeAmount(), formCurrency)}</span>
                         </div>
                       )}
                     </div>
@@ -686,7 +693,7 @@ export default function ServiceDetailPage({ params }: { params: Promise<{ id: st
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => { setBookingStep("details"); setFormValues({}); setAppointmentId(null); setPaymentError(null); }}
+                      onClick={() => { setBookingStep("details"); setFormValues({}); setPaymentError(null); }}
                       className="w-full"
                     >
                       Book Another
@@ -708,8 +715,8 @@ function FeedbackCard({
   feedback,
   payload,
 }: {
-  feedback: ServiceFeedback;
-  payload: { title?: string; body?: string } | null;
+  readonly feedback: ServiceFeedback;
+  readonly payload: { readonly title?: string; readonly body?: string } | null;
 }) {
   const { data: userData } = useQuery<{ user: { id: string; firstName: string; lastName: string; profilePictureUrl: string | null } }>(
     GET_USER, { id: feedback.userId }
@@ -731,8 +738,8 @@ function FeedbackCard({
             <p className="text-xs text-muted-foreground">{formatDate(feedback.createdAt ?? "")}</p>
           </div>
           <div className="flex items-center gap-0.5">
-            {Array.from({ length: feedback.rating ?? 0 }).map((_, i) => (
-              <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            {Array.from({ length: feedback.rating ?? 0 }, (_, i) => i + 1).map((n) => (
+              <Star key={n} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
             ))}
           </div>
         </div>
