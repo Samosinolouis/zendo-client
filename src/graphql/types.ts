@@ -328,8 +328,6 @@ export type CreatePayoutStatementPayload = {
 
 export type CreateServiceAppointmentInput = {
   amount: Scalars['Float']['input'];
-  /** Optional: link this appointment to a specific availability slot */
-  availabilityId?: InputMaybe<Scalars['ID']['input']>;
   /** Must match the businessId of the service — validated server-side */
   businessId: Scalars['ID']['input'];
   currency: Scalars['String']['input'];
@@ -340,20 +338,6 @@ export type CreateServiceAppointmentInput = {
 export type CreateServiceAppointmentPayload = {
   __typename?: 'CreateServiceAppointmentPayload';
   serviceAppointment: ServiceAppointment;
-};
-
-export type CreateServiceAvailabilityInput = {
-  /**  Duration in minutes (default 60)  */
-  durationMinutes?: InputMaybe<Scalars['Int']['input']>;
-  /**  Max bookings for this slot (default 1)  */
-  maxBookings?: InputMaybe<Scalars['Int']['input']>;
-  scheduledAt: Scalars['DateTime']['input'];
-  serviceId: Scalars['ID']['input'];
-};
-
-export type CreateServiceAvailabilityPayload = {
-  __typename?: 'CreateServiceAvailabilityPayload';
-  serviceAvailability: ServiceAvailability;
 };
 
 export type CreateServiceBillingInput = {
@@ -423,11 +407,6 @@ export type DeleteBusinessPayload = {
   __typename?: 'DeleteBusinessPayload';
   deletedId: Scalars['ID']['output'];
   success: Scalars['Boolean']['output'];
-};
-
-export type DeleteServiceAvailabilityPayload = {
-  __typename?: 'DeleteServiceAvailabilityPayload';
-  id: Scalars['ID']['output'];
 };
 
 export type DeleteServiceFormInput = {
@@ -503,7 +482,6 @@ export type Mutation = {
   createService: CreateServicePayload;
   /** Book a service appointment (requires authentication) */
   createServiceAppointment: CreateServiceAppointmentPayload;
-  createServiceAvailability: CreateServiceAvailabilityPayload;
   /** Create a service billing (admin only) */
   createServiceBilling: CreateServiceBillingPayload;
   /** Submit a feedback/review for a service (requires authentication) */
@@ -516,7 +494,6 @@ export type Mutation = {
   deleteBusiness: DeleteBusinessPayload;
   /** Delete a service (business owner only) */
   deleteService: DeleteServicePayload;
-  deleteServiceAvailability: DeleteServiceAvailabilityPayload;
   /** Delete a service form (service owner only) */
   deleteServiceForm: DeleteServiceFormPayload;
   /** Delete a service page (service owner only) */
@@ -608,11 +585,6 @@ export type MutationCreateServiceAppointmentArgs = {
 };
 
 
-export type MutationCreateServiceAvailabilityArgs = {
-  input: CreateServiceAvailabilityInput;
-};
-
-
 export type MutationCreateServiceBillingArgs = {
   input: CreateServiceBillingInput;
 };
@@ -640,11 +612,6 @@ export type MutationDeleteBusinessArgs = {
 
 export type MutationDeleteServiceArgs = {
   input: DeleteServiceInput;
-};
-
-
-export type MutationDeleteServiceAvailabilityArgs = {
-  id: Scalars['ID']['input'];
 };
 
 
@@ -1069,8 +1036,6 @@ export type Query = {
   billingAddresses: BillingAddressConnection;
   /** Fetch a single business by ID */
   business?: Maybe<Business>;
-  /**  All availability slots across a business  */
-  businessAvailabilities: Array<ServiceAvailability>;
   /** Fetch a single business feedback by ID */
   businessFeedback?: Maybe<BusinessFeedback>;
   /** List business feedbacks with relay-style cursor pagination */
@@ -1111,8 +1076,6 @@ export type Query = {
   serviceAppointment?: Maybe<ServiceAppointment>;
   /** List service appointments with relay-style cursor pagination */
   serviceAppointments: ServiceAppointmentConnection;
-  /**  All availability slots for a service (future slots only by default)  */
-  serviceAvailabilities: Array<ServiceAvailability>;
   /** Fetch a single service billing by ID */
   serviceBilling?: Maybe<ServiceBilling>;
   /** List service billings with relay-style cursor pagination */
@@ -1172,12 +1135,6 @@ export type QueryBillingAddressesArgs = {
 
 export type QueryBusinessArgs = {
   id: Scalars['ID']['input'];
-};
-
-
-export type QueryBusinessAvailabilitiesArgs = {
-  businessId: Scalars['ID']['input'];
-  includeAll?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 
@@ -1303,12 +1260,6 @@ export type QueryServiceAppointmentsArgs = {
   filter?: InputMaybe<ServiceAppointmentFilter>;
   first: Scalars['Int']['input'];
   sort?: InputMaybe<ServiceAppointmentSort>;
-};
-
-
-export type QueryServiceAvailabilitiesArgs = {
-  includeAll?: InputMaybe<Scalars['Boolean']['input']>;
-  serviceId: Scalars['ID']['input'];
 };
 
 
@@ -1571,8 +1522,8 @@ export type ServiceAppointment = Node & {
   __typename?: 'ServiceAppointment';
   /** Appointment amount */
   amount: Scalars['Float']['output'];
-  /** Optional: the availability slot this appointment was booked through */
-  availabilityId?: Maybe<Scalars['ID']['output']>;
+  /** When the appointment was approved by the business owner (null if not yet approved) */
+  approvedAt?: Maybe<Scalars['DateTime']['output']>;
   /** ID of the business that owns the service */
   businessId: Scalars['ID']['output'];
   /** When the appointment was cancelled (null if active) */
@@ -1593,6 +1544,8 @@ export type ServiceAppointment = Node & {
   paymentLinks?: Maybe<PaymentLinkConnection>;
   /** Payments for this appointment */
   payments?: Maybe<PaymentConnection>;
+  /** When the appointment was rejected by the business owner (null if not rejected) */
+  rejectedAt?: Maybe<Scalars['DateTime']['output']>;
   /** The service being booked */
   service?: Maybe<Service>;
   /** ID of the service being booked */
@@ -1645,27 +1598,6 @@ export enum ServiceAppointmentSortField {
   CreatedAt = 'CREATED_AT',
   CreatedAtDesc = 'CREATED_AT_DESC'
 }
-
-/**
- * A bookable time slot defined by a business owner for a specific service.
- * Each slot has a maximum booking count (default 1 = exclusive single booking).
- */
-export type ServiceAvailability = Node & {
-  __typename?: 'ServiceAvailability';
-  bookedCount: Scalars['Int']['output'];
-  businessId: Scalars['ID']['output'];
-  createdAt: Scalars['DateTime']['output'];
-  createdBy: Scalars['ID']['output'];
-  durationMinutes: Scalars['Int']['output'];
-  id: Scalars['ID']['output'];
-  /**  True when the slot is full and cannot accept more bookings  */
-  isFull: Scalars['Boolean']['output'];
-  maxBookings: Scalars['Int']['output'];
-  scheduledAt: Scalars['DateTime']['output'];
-  service?: Maybe<Service>;
-  serviceId: Scalars['ID']['output'];
-  updatedAt: Scalars['DateTime']['output'];
-};
 
 /** A BIR-registered service billing linked to a payout statement. */
 export type ServiceBilling = Node & {

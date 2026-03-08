@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { use, useState } from "react";
 import Link from "next/link";
@@ -8,16 +8,23 @@ import {
   GET_SERVICE, GET_BUSINESS, GET_SERVICE_FEEDBACKS, GET_USER,
   GET_SERVICE_PAGE, GET_SERVICE_FORM, GET_SERVICE_AVAILABILITIES,
 } from "@/graphql/queries";
-import { CREATE_SERVICE_APPOINTMENT, CREATE_PAYMENT_LINK, CREATE_SERVICE_FEEDBACK } from "@/graphql/mutations";
-import type { Service, Business, ServiceFeedback, ServiceForm, ServicePage, ServiceAvailability, Connection } from "@/types";
+import {
+  CREATE_SERVICE_APPOINTMENT,
+  CREATE_PAYMENT_LINK,
+  CREATE_SERVICE_FEEDBACK,
+} from "@/graphql/mutations";
+import type {
+  Service, Business, ServiceFeedback, ServiceForm,
+  ServicePage, ServiceAvailability, Connection,
+} from "@/types";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import {
   ArrowLeft, Star, CalendarDays, CheckCircle2,
-  AlertCircle, BookOpen, MessageCircle,
-  Loader2, Clock,
+  AlertCircle, BookOpen, MessageCircle, Loader2, Clock,
 } from "lucide-react";
 import { parsePagePayload } from "@/graphql/page-nodes";
 import { parseFormPayload, isOptionsField, isBooleanField } from "@/graphql/form";
+import type { FormField } from "@/graphql/form";
 import { NodePreview } from "@/app/(main)/owner/pages/page";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -32,9 +39,9 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { FormField } from "@/graphql/form";
 
-// ── Per-field input renderer ──────────────────────────────────
+type BookingStep = "details" | "review" | "payment" | "confirmed";
+
 function FormFieldInput({
   field,
   value,
@@ -49,7 +56,7 @@ function FormFieldInput({
       return (
         <Select value={value || ""} onValueChange={onChange}>
           <SelectTrigger>
-            <SelectValue placeholder={field.placeholder ?? "Select…"} />
+            <SelectValue placeholder={field.placeholder ?? "Select..."} />
           </SelectTrigger>
           <SelectContent>
             {field.options.map((opt) => (
@@ -59,7 +66,6 @@ function FormFieldInput({
         </Select>
       );
     }
-    // radio
     return (
       <div className="space-y-1">
         {field.options.map((opt) => (
@@ -91,9 +97,7 @@ function FormFieldInput({
     );
   }
   if (field.type === "date") {
-    return (
-      <Input type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} />
-    );
+    return <Input type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} />;
   }
   if (field.type === "textarea") {
     return (
@@ -134,7 +138,6 @@ function FormFieldInput({
       />
     );
   }
-  // text (default)
   return (
     <Input
       type="text"
@@ -145,13 +148,257 @@ function FormFieldInput({
   );
 }
 
-export default function ServiceDetailPage({ params }: { readonly params: Promise<{ id: string }> }) {
+interface BookingFormStepsProps {
+  readonly service: Service;
+  readonly business: Business;
+  readonly fields: readonly FormField[];
+  readonly formValues: Record<string, string>;
+  readonly formCurrency: string;
+  readonly availableSlots: readonly ServiceAvailability[];
+  readonly selectedSlotId: string | null;
+  readonly setSelectedSlotId: (id: string | null) => void;
+  readonly handleFieldChange: (name: string, value: string) => void;
+  readonly computeAmount: () => number;
+  readonly bookingStep: BookingStep;
+  readonly setBookingStep: (step: BookingStep) => void;
+  readonly handleConfirmBooking: () => Promise<void>;
+  readonly bookingLoading: boolean;
+  readonly paymentLoading: boolean;
+  readonly paymentError: string | null;
+  readonly setFormValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  readonly setPaymentError: (err: string | null) => void;
+  readonly isLoggedIn: boolean;
+}
+
+function BookingFormSteps({
+  service,
+  business,
+  fields,
+  formValues,
+  formCurrency,
+  availableSlots,
+  selectedSlotId,
+  setSelectedSlotId,
+  handleFieldChange,
+  computeAmount,
+  bookingStep,
+  setBookingStep,
+  handleConfirmBooking,
+  bookingLoading,
+  paymentLoading,
+  paymentError,
+  setFormValues,
+  setPaymentError,
+  isLoggedIn,
+}: BookingFormStepsProps) {
+  if (bookingStep === "details") {
+    return (
+      <div className="space-y-5">
+        {isLoggedIn ? (
+          <>
+            {availableSlots.length > 0 && (
+              <div className="space-y-2">
+                <Label>Choose a Time Slot</Label>
+                <div className="grid gap-2">
+                  {availableSlots.map((slot) => {
+                    const date = new Date(slot.scheduledAt);
+                    const isSelected = selectedSlotId === slot.id;
+                    return (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        onClick={() => setSelectedSlotId(isSelected ? null : slot.id)}
+                        className={`flex items-center justify-between rounded-lg border p-3 text-sm transition-colors text-left ${
+                          isSelected
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:border-primary/50 hover:bg-muted"
+                        }`}
+                      >
+                        <span className="font-medium">
+                          {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}{" "}
+                          {date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5" />
+                          {slot.durationMinutes} min
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {fields.map((field) => (
+              <div key={field.name} className="space-y-2">
+                <Label>
+                  {field.label}
+                  {field.required && <span className="text-destructive ml-0.5">*</span>}
+                </Label>
+                {field.tooltip && (
+                  <p className="text-xs text-muted-foreground">{field.tooltip}</p>
+                )}
+                <FormFieldInput
+                  field={field}
+                  value={formValues[field.name] ?? ""}
+                  onChange={(v) => handleFieldChange(field.name, v)}
+                />
+              </div>
+            ))}
+
+            {fields.length === 0 && availableSlots.length === 0 && (
+              <div className="text-center py-4">
+                <CalendarDays className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  No additional details needed. Click below to proceed.
+                </p>
+              </div>
+            )}
+
+            <Button onClick={() => setBookingStep("review")} className="w-full">
+              Continue to Review
+            </Button>
+          </>
+        ) : (
+          <div className="text-center py-4">
+            <AlertCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground mb-3">
+              Sign in to book an appointment
+            </p>
+            <Button variant="outline" size="sm" onClick={() => signIn("keycloak")}>
+              Sign in
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (bookingStep === "review") {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h4 className="text-sm font-semibold text-foreground mb-3">Booking Summary</h4>
+          <div className="bg-muted rounded-lg p-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Service</span>
+              <span className="font-medium text-foreground">{service.name}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Business</span>
+              <span className="text-foreground">{business.name}</span>
+            </div>
+            {selectedSlotId && (() => {
+              const slot = availableSlots.find((s) => s.id === selectedSlotId);
+              if (!slot) return null;
+              const d = new Date(slot.scheduledAt);
+              return (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Time Slot</span>
+                  <span className="text-foreground">
+                    {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
+                    {d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              );
+            })()}
+            {Object.entries(formValues).map(([fieldName, val]) => {
+              const field = fields.find((f) => f.name === fieldName);
+              if (!val || !field) return null;
+              return (
+                <div key={fieldName} className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{field.label}</span>
+                  <span className="text-foreground">{val}</span>
+                </div>
+              );
+            })}
+            {computeAmount() > 0 && (
+              <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2">
+                <span>Total</span>
+                <span>{formatCurrency(computeAmount(), formCurrency)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {paymentError && (
+          <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <p>{paymentError}</p>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setBookingStep("details")} className="flex-1">
+            Back
+          </Button>
+          <Button
+            onClick={handleConfirmBooking}
+            disabled={bookingLoading || paymentLoading}
+            className="flex-1"
+          >
+            {(bookingLoading || paymentLoading) && (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            )}
+            Confirm & Pay
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (bookingStep === "payment") {
+    return (
+      <div className="text-center py-6">
+        <Loader2 className="w-12 h-12 text-primary mx-auto mb-4 animate-spin" />
+        <h4 className="font-semibold text-foreground">Redirecting to payment...</h4>
+        <p className="text-sm text-muted-foreground mt-2">
+          Please wait while we set up your secure payment.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-center space-y-4 py-4">
+      <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto" />
+      <div>
+        <h4 className="text-lg font-semibold text-foreground">Booking Confirmed!</h4>
+        <p className="text-sm text-muted-foreground mt-1">
+          Your appointment has been booked successfully.
+        </p>
+      </div>
+      <div className="flex flex-col gap-2">
+        <Button asChild className="w-full">
+          <Link href="/appointments">View My Appointments</Link>
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setBookingStep("details");
+            setFormValues({});
+            setPaymentError(null);
+          }}
+          className="w-full"
+        >
+          Book Another
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export default function ServiceDetailPage({
+  params,
+}: {
+  readonly params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const { isLoggedIn } = useAuth();
 
-  /* ── API queries ─────────────────────────────────────────── */
-
-  const { data: svcData, loading: svcLoading } = useQuery<{ service: Service }>(GET_SERVICE, { id });
+  const { data: svcData, loading: svcLoading } = useQuery<{ service: Service }>(
+    GET_SERVICE, { id }
+  );
   const service = svcData?.service ?? null;
 
   const { data: bizData } = useQuery<{ business: Business }>(
@@ -163,7 +410,7 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
     GET_SERVICE_FORM, { serviceId: id }
   );
   const parsedForm = parseFormPayload(
-    formData?.serviceFormByService?.payload as Record<string, unknown> | null,
+    formData?.serviceFormByService?.payload as Record<string, unknown> | null
   );
   const fields = parsedForm.fields;
   const formCurrency = parsedForm.currency;
@@ -171,12 +418,7 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
   const { data: pageData } = useQuery<{ servicePageByService: ServicePage | null }>(
     GET_SERVICE_PAGE, { serviceId: id }
   );
-
-  const { data: availData } = useQuery<{ serviceAvailabilities: ServiceAvailability[] }>(
-    GET_SERVICE_AVAILABILITIES, { serviceId: id, includeAll: false }, { skip: !id }
-  );
-  const availableSlots = availData?.serviceAvailabilities?.filter((s) => !s.isFull) ?? [];
-  const blogPayload  = parsePagePayload(
+  const blogPayload = parsePagePayload(
     pageData?.servicePageByService?.payload as Record<string, unknown> | null,
     service?.name ?? "",
   );
@@ -186,12 +428,17 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
   const blogTags     = blogPayload.tags;
   const blogBanner   = blogPayload.bannerImageUrl;
 
-  const { data: fbData, refetch: refetchFeedbacks } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
-    GET_SERVICE_FEEDBACKS, { first: 100, filter: { serviceId: id } }
-  );
-  const feedbacks = extractNodes(fbData?.serviceFeedbacks);
+  const hasInlineForm = blogNodes.some((n) => n.type === "serviceForm");
 
-  /* ── Mutations ───────────────────────────────────────────── */
+  const { data: availData } = useQuery<{ serviceAvailabilities: ServiceAvailability[] }>(
+    GET_SERVICE_AVAILABILITIES, { serviceId: id, includeAll: false }, { skip: !id }
+  );
+  const availableSlots = availData?.serviceAvailabilities?.filter((s) => !s.isFull) ?? [];
+
+  const { data: fbData, refetch: refetchFeedbacks } = useQuery<{
+    serviceFeedbacks: Connection<ServiceFeedback>;
+  }>(GET_SERVICE_FEEDBACKS, { first: 100, filter: { serviceId: id } });
+  const feedbacks = extractNodes(fbData?.serviceFeedbacks);
 
   const { mutate: createAppointment, loading: bookingLoading } = useMutation<{
     createServiceAppointment: { serviceAppointment: { id: string } };
@@ -205,20 +452,15 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
     createServiceFeedback: { serviceFeedback: { id: string } };
   }>(CREATE_SERVICE_FEEDBACK, { onCompleted: refetchFeedbacks });
 
-  /* ── Local state ─────────────────────────────────────────── */
-
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  const [bookingStep, setBookingStep] = useState<"details" | "review" | "payment" | "confirmed">("details");
+  const [bookingStep, setBookingStep] = useState<BookingStep>("details");
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  /* review form state */
-  const [reviewRating, setReviewRating]   = useState(0);
-  const [reviewTitle, setReviewTitle]     = useState("");
-  const [reviewBody, setReviewBody]       = useState("");
-  const [reviewDone, setReviewDone]       = useState(false);
-
-  /* ── Loading / not-found ─────────────────────────────────── */
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewTitle, setReviewTitle]   = useState("");
+  const [reviewBody, setReviewBody]     = useState("");
+  const [reviewDone, setReviewDone]     = useState(false);
 
   if (svcLoading) {
     return (
@@ -244,36 +486,34 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
     );
   }
 
-  /* ── Helpers ─────────────────────────────────────────────── */
-
   const handleFieldChange = (fieldName: string, value: string) => {
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
   };
 
-  // totalAmount = SUM(field.amount for all fields), as per Dynamic Booking Form Schema v1.
-  // Options carry no pricing; per-option adjustments are handled by backend plugins.
   const computeAmount = (): number => parsedForm.totalAmount;
-
-  const handleSubmitBooking = () => setBookingStep("review");
 
   const handleConfirmBooking = async () => {
     setPaymentError(null);
     try {
-      const amount = computeAmount();
       const result = await createAppointment({
         input: {
           serviceId: id,
           businessId: service.businessId,
-          amount,
+          amount: computeAmount(),
           currency: formCurrency,
-          payload: { formValues, status: "pending", scheduledAt: formValues["date"] || null },
+          payload: {
+            formValues,
+            status: "pending",
+            scheduledAt: formValues["date"] || null,
+          },
           ...(selectedSlotId ? { availabilityId: selectedSlotId } : {}),
         },
       });
+
       const aptId = result?.createServiceAppointment?.serviceAppointment?.id;
       if (!aptId) throw new Error("Failed to create appointment.");
 
-      setBookingStep("payment"); // show redirecting state
+      setBookingStep("payment");
 
       const payResult = await createPaymentLink({
         input: { serviceAppointmentsId: aptId },
@@ -285,8 +525,9 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
         throw new Error("Payment provider did not return a redirect URL.");
       }
     } catch (err) {
-      console.error("Booking/payment failed:", err);
-      setPaymentError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setPaymentError(
+        err instanceof Error ? err.message : "Something went wrong. Please try again."
+      );
       setBookingStep("review");
     }
   };
@@ -296,36 +537,78 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
       ? feedbacks.reduce((sum, f) => sum + (f.rating ?? 0), 0) / feedbacks.length
       : null;
 
+  const bookingProps: BookingFormStepsProps = {
+    service,
+    business,
+    fields,
+    formValues,
+    formCurrency,
+    availableSlots,
+    selectedSlotId,
+    setSelectedSlotId,
+    handleFieldChange,
+    computeAmount,
+    bookingStep,
+    setBookingStep,
+    handleConfirmBooking,
+    bookingLoading,
+    paymentLoading,
+    paymentError,
+    setFormValues,
+    setPaymentError,
+    isLoggedIn,
+  };
+
   return (
     <div>
-      {/* Banner */}
       <div className="relative h-48 sm:h-64 bg-muted">
         {service.bannerImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={service.bannerImageUrl} alt={service.name} className="w-full h-full object-cover" />
+          <img
+            src={service.bannerImageUrl}
+            alt={service.name}
+            className="w-full h-full object-cover"
+          />
         )}
-        <div className="absolute inset-0 bg-linear-to-t from-black/50 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
-          <Button variant="ghost" size="sm" asChild className="text-white/80 hover:text-white hover:bg-white/10 mb-2 -ml-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="text-white/80 hover:text-white hover:bg-white/10 mb-2 -ml-2"
+          >
             <Link href={`/business/${business.id}`}>
               <ArrowLeft className="w-4 h-4 mr-1" /> {business.name}
             </Link>
           </Button>
           <h1 className="text-2xl sm:text-3xl font-bold text-white">{service.name}</h1>
           {(service.minPrice ?? service.maxPrice) && (
-            <div className="mt-2 text-lg font-semibold text-green-300">
-              ₱{Number.parseFloat((service.minPrice ?? service.maxPrice ?? 0).toString()).toFixed(2)}
-            </div>
+            <p className="mt-1 text-lg font-semibold text-green-300">
+              Starting at{" "}
+              {formatCurrency(
+                Number.parseFloat((service.minPrice ?? service.maxPrice ?? 0).toString()),
+                "PHP"
+              )}
+            </p>
           )}
           {avgRating !== null && (
             <div className="flex items-center gap-2 mt-2">
               <div className="flex items-center gap-0.5">
                 {[1, 2, 3, 4, 5].map((n) => (
-                  <Star key={n} className={`w-4 h-4 ${n <= Math.round(avgRating) ? "fill-amber-400 text-amber-400" : "text-white/30"}`} />
+                  <Star
+                    key={n}
+                    className={`w-4 h-4 ${
+                      n <= Math.round(avgRating)
+                        ? "fill-amber-400 text-amber-400"
+                        : "text-white/30"
+                    }`}
+                  />
                 ))}
               </div>
               <span className="text-white/80 text-sm">
-                {avgRating.toFixed(1)} ({feedbacks.length} review{feedbacks.length === 1 ? "" : "s"})
+                {avgRating.toFixed(1)} ({feedbacks.length}{" "}
+                {feedbacks.length === 1 ? "review" : "reviews"})
               </span>
             </div>
           )}
@@ -334,7 +617,6 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* Left — Blog-like Service Content */}
           <div className="lg:col-span-2 space-y-8">
             <Tabs defaultValue="about" className="w-full">
               <TabsList className="mb-6">
@@ -349,7 +631,7 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
               <TabsContent value="about" className="space-y-6">
                 <Card>
                   <CardContent className="p-6">
-                    <p className="text-muted-foreground leading-relaxed text-base">{service.description}</p>
+                    <p className="text-muted-foreground leading-relaxed">{service.description}</p>
                   </CardContent>
                 </Card>
 
@@ -365,7 +647,9 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
                       {blogTags.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {blogTags.map((tag) => (
-                            <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">{tag}</span>
+                            <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                              {tag}
+                            </span>
                           ))}
                         </div>
                       )}
@@ -373,9 +657,26 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
                   </Card>
                 )}
 
-                {blogNodes.map((node) => (
-                  <NodePreview key={node.id} node={node} />
-                ))}
+                {blogNodes.map((node) =>
+                  node.type === "serviceForm" ? (
+                    <Card key={node.id} className="shadow-sm border-primary/20">
+                      <CardHeader className="border-b border-border pb-4">
+                        <CardTitle className="text-xl">Book This Service</CardTitle>
+                        <p className="text-sm text-muted-foreground">{business.name}</p>
+                        {computeAmount() > 0 && (
+                          <p className="text-xl font-bold text-primary mt-1">
+                            {formatCurrency(computeAmount(), formCurrency)}
+                          </p>
+                        )}
+                      </CardHeader>
+                      <CardContent className="p-6">
+                        <BookingFormSteps {...bookingProps} />
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <NodePreview key={node.id} node={node} />
+                  )
+                )}
 
                 <Card>
                   <CardContent className="p-6">
@@ -407,18 +708,14 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
                 ) : (
                   feedbacks.map((fb) => {
                     const payload = fb.payload as { title?: string; body?: string } | null;
-                    return (
-                      <FeedbackCard key={fb.id} feedback={fb} payload={payload} />
-                    );
+                    return <FeedbackCard key={fb.id} feedback={fb} payload={payload} />;
                   })
                 )}
 
-                {/* Write a review */}
                 {isLoggedIn && !reviewDone && (
                   <Card>
                     <CardContent className="p-6 space-y-4">
                       <h3 className="text-base font-semibold text-foreground">Write a Review</h3>
-                      {/* Star picker */}
                       <div className="flex items-center gap-1">
                         {[1, 2, 3, 4, 5].map((n) => (
                           <button
@@ -454,7 +751,7 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
                       <div className="space-y-2">
                         <Label>Review</Label>
                         <Textarea
-                          placeholder="Tell others what you thought of this service…"
+                          placeholder="Tell others what you thought of this service..."
                           value={reviewBody}
                           onChange={(e) => setReviewBody(e.target.value)}
                           rows={4}
@@ -510,7 +807,6 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
             </Tabs>
           </div>
 
-          {/* Right — Booking Card */}
           <div className="lg:col-span-1">
             <Card className="sticky top-24 shadow-lg">
               <CardHeader className="border-b border-border">
@@ -518,187 +814,24 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
                 <p className="text-sm text-muted-foreground">{business.name}</p>
                 {(service.minPrice ?? service.maxPrice) && (
                   <p className="text-xl font-bold text-primary">
-                    {formatCurrency(Number.parseFloat((service.minPrice ?? service.maxPrice ?? 0).toString()), "PHP")}
+                    {formatCurrency(
+                      Number.parseFloat((service.minPrice ?? service.maxPrice ?? 0).toString()),
+                      "PHP"
+                    )}
                   </p>
                 )}
               </CardHeader>
 
-              {bookingStep === "details" && (
-                <CardContent className="p-6 space-y-5">
-                  {isLoggedIn ? (
-                    <>
-                      {/* ── Slot picker (only shown when service has availability slots) ── */}
-                      {availableSlots.length > 0 && (
-                        <div className="space-y-2">
-                          <Label>Choose a Time Slot</Label>
-                          <div className="grid gap-2">
-                            {availableSlots.map((slot) => {
-                              const date = new Date(slot.scheduledAt);
-                              const isSelected = selectedSlotId === slot.id;
-                              return (
-                                <button
-                                  key={slot.id}
-                                  type="button"
-                                  onClick={() => setSelectedSlotId(isSelected ? null : slot.id)}
-                                  className={`flex items-center justify-between rounded-lg border p-3 text-sm transition-colors text-left ${
-                                    isSelected
-                                      ? "border-primary bg-primary/10 text-primary"
-                                      : "border-border hover:border-primary/50 hover:bg-muted"
-                                  }`}
-                                >
-                                  <span className="font-medium">
-                                    {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}{" "}
-                                    {date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                                  </span>
-                                  <span className="flex items-center gap-1 text-muted-foreground">
-                                    <Clock className="h-3.5 w-3.5" />
-                                    {slot.durationMinutes} min
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {fields.map((field) => (
-                        <div key={field.name} className="space-y-2">
-                          <Label>
-                            {field.label}
-                            {field.required && <span className="text-destructive ml-0.5">*</span>}
-                          </Label>
-                          {field.tooltip && (
-                            <p className="text-xs text-muted-foreground">{field.tooltip}</p>
-                          )}
-                          <FormFieldInput
-                            field={field}
-                            value={formValues[field.name] ?? ""}
-                            onChange={(v) => handleFieldChange(field.name, v)}
-                          />
-                        </div>
-                      ))}
-
-                      {fields.length === 0 && (
-                        <div className="text-center py-4">
-                          <CalendarDays className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">
-                            No additional details needed. Click below to proceed.
-                          </p>
-                        </div>
-                      )}
-
-                      <Button onClick={handleSubmitBooking} className="w-full">
-                        Continue to Review
-                      </Button>
-                    </>
-                  ) : (
-                    <div className="text-center py-4">
-                      <AlertCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                      <p className="text-sm text-muted-foreground mb-3">Sign in to book an appointment</p>
-                      <Button variant="outline" size="sm" onClick={() => signIn("keycloak")}>
-                        Sign in
-                      </Button>
-                    </div>
-                  )}
+              {hasInlineForm ? (
+                <CardContent className="p-6 text-center space-y-3 text-muted-foreground">
+                  <CalendarDays className="w-8 h-8 mx-auto opacity-30" />
+                  <p className="text-sm">
+                    Scroll up to find the booking form in the page content.
+                  </p>
                 </CardContent>
-              )}
-
-              {bookingStep === "review" && (
-                <CardContent className="p-6 space-y-5">
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground mb-3">Booking Summary</h4>
-                    <div className="bg-muted rounded-lg p-4 space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Service</span>
-                        <span className="text-foreground font-medium">{service.name}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Business</span>
-                        <span className="text-foreground">{business.name}</span>
-                      </div>
-                      {selectedSlotId && (() => {
-                        const slot = availableSlots.find((s) => s.id === selectedSlotId);
-                        if (!slot) return null;
-                        const d = new Date(slot.scheduledAt);
-                        return (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Time Slot</span>
-                            <span className="text-foreground">
-                              {d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
-                              {d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                      {Object.entries(formValues).map(([fieldName, value]) => {
-                        const field = fields.find((f) => f.name === fieldName);
-                        if (!value || !field) return null;
-                        return (
-                          <div key={fieldName} className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">{field.label}</span>
-                            <span className="text-foreground">{value}</span>
-                          </div>
-                        );
-                      })}
-                      {computeAmount() > 0 && (
-                        <div className="flex justify-between text-sm font-bold border-t pt-2 mt-2">
-                          <span>Total</span>
-                          <span>{formatCurrency(computeAmount(), formCurrency)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {paymentError && (
-                    <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">
-                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <p>{paymentError}</p>
-                    </div>
-                  )}
-                  <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => setBookingStep("details")} className="flex-1">
-                      Back
-                    </Button>
-                    <Button onClick={handleConfirmBooking} disabled={bookingLoading || paymentLoading} className="flex-1">
-                      {(bookingLoading || paymentLoading) && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                      Confirm & Pay
-                    </Button>
-                  </div>
-                </CardContent>
-              )}
-
-              {bookingStep === "payment" && (
-                <CardContent className="p-6 space-y-5">
-                  <div className="text-center py-4">
-                    <Loader2 className="w-12 h-12 text-primary mx-auto mb-4 animate-spin" />
-                    <h4 className="font-semibold text-foreground">Redirecting to PayMaya...</h4>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Please wait while we set up your secure payment.
-                    </p>
-                  </div>
-                </CardContent>
-              )}
-
-              {bookingStep === "confirmed" && (
-                <CardContent className="p-6 space-y-5 text-center">
-                  <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto" />
-                  <div>
-                    <h4 className="text-lg font-semibold text-foreground">Booking Confirmed!</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Your appointment has been booked successfully.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button asChild className="w-full">
-                      <Link href="/appointments">View My Appointments</Link>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => { setBookingStep("details"); setFormValues({}); setPaymentError(null); }}
-                      className="w-full"
-                    >
-                      Book Another
-                    </Button>
-                  </div>
+              ) : (
+                <CardContent className="p-6">
+                  <BookingFormSteps {...bookingProps} />
                 </CardContent>
               )}
             </Card>
@@ -709,8 +842,6 @@ export default function ServiceDetailPage({ params }: { readonly params: Promise
   );
 }
 
-/* ── Feedback card component (fetches reviewer lazily) ─────── */
-
 function FeedbackCard({
   feedback,
   payload,
@@ -718,9 +849,14 @@ function FeedbackCard({
   readonly feedback: ServiceFeedback;
   readonly payload: { readonly title?: string; readonly body?: string } | null;
 }) {
-  const { data: userData } = useQuery<{ user: { id: string; firstName: string; lastName: string; profilePictureUrl: string | null } }>(
-    GET_USER, { id: feedback.userId }
-  );
+  const { data: userData } = useQuery<{
+    user: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      profilePictureUrl: string | null;
+    };
+  }>(GET_USER, { id: feedback.userId });
   const reviewer = userData?.user ?? null;
 
   return (
