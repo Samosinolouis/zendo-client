@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { useAuth } from "@/providers/AuthProvider";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_BILLING_ADDRESSES, GET_PAYMENTS, GET_SALES_INVOICES } from "@/graphql/queries";
 import { UPDATE_USER, REQUEST_SALES_INVOICE, RESOLVE_SALES_INVOICE } from "@/graphql/mutations";
@@ -17,13 +17,13 @@ import {
   Camera, Loader2, Check, X, Pencil, Phone, Briefcase, AlertTriangle,
   Upload, ExternalLink, CheckCircle, Clock, AlertCircle, Receipt,
 } from "lucide-react";
-import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -55,7 +55,7 @@ export default function ProfilePage() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch billing address
-  const { data: billingData } = useQuery<{ billingAddresses: Connection<BillingAddress> }>(
+  const { data: billingData, loading: billingLoading } = useQuery<{ billingAddresses: Connection<BillingAddress> }>(
     GET_BILLING_ADDRESSES,
     { first: 1, filter: { userId: user?.id } },
     { skip: !user }
@@ -63,7 +63,7 @@ export default function ProfilePage() {
   const billingAddress = extractNodes(billingData?.billingAddresses)[0] ?? null;
 
   // Fetch payments
-  const { data: paymentData } = useQuery<{ payments: Connection<Payment> }>(
+  const { data: paymentData, loading: paymentsLoading } = useQuery<{ payments: Connection<Payment> }>(
     GET_PAYMENTS,
     { first: 50, filter: { userId: user?.id } },
     { skip: !user }
@@ -71,7 +71,7 @@ export default function ProfilePage() {
   const payments = extractNodes(paymentData?.payments);
 
   // Fetch invoices
-  const { data: invoiceData, refetch: refetchInvoices } = useQuery<{ salesInvoices: Connection<SalesInvoice> }>(
+  const { data: invoiceData, loading: invoicesLoading, refetch: refetchInvoices } = useQuery<{ salesInvoices: Connection<SalesInvoice> }>(
     GET_SALES_INVOICES,
     { first: 50 },
     { skip: !user }
@@ -147,7 +147,7 @@ export default function ProfilePage() {
   const handleStartEdit = () => {
     const existing = user.mobileNumber ?? "";
     // Parse existing "+63 9380542839" → code="+63", local="9380542839"
-    const match = existing.match(/^(\+\d+)\s(.+)$/);
+    const match = /^(\+\d+)\s(.+)$/.exec(existing);
     setEditForm({
       firstName: user.firstName || "",
       lastName: user.lastName || "",
@@ -216,7 +216,211 @@ export default function ProfilePage() {
     }
   };
 
-  const totalSpent = payments.reduce((s, p) => s + parseFloat(p.amount || "0"), 0);
+  const totalSpent = payments.reduce((s, p) => s + Number.parseFloat(p.amount || "0"), 0);
+
+  let billingContent: React.ReactNode;
+  if (billingLoading) {
+    billingContent = (
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+    );
+  } else if (billingAddress) {
+    billingContent = (
+      <div className="bg-muted rounded-xl p-4 border text-sm text-foreground space-y-0.5">
+        <p className="font-semibold">{billingAddress.addressLine1}</p>
+        {billingAddress.addressLine2 && <p>{billingAddress.addressLine2}</p>}
+        <p>{billingAddress.city}, {billingAddress.state} {billingAddress.postalCode}</p>
+        <p className="text-muted-foreground">{billingAddress.country}</p>
+      </div>
+    );
+  } else {
+    billingContent = (
+      <div className="text-center py-8">
+        <MapPin className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3 animate-float" />
+        <p className="text-sm text-muted-foreground">No billing address on file.</p>
+      </div>
+    );
+  }
+
+  let paymentHistoryContent: React.ReactNode;
+  if (paymentsLoading) {
+    paymentHistoryContent = (
+      <div className="space-y-2">
+        {[0, 1, 2].map((n) => (
+          <Skeleton key={n} className="h-10 w-full rounded-md" />
+        ))}
+      </div>
+    );
+  } else if (payments.length === 0) {
+    paymentHistoryContent = (
+      <div className="text-center py-8">
+        <CreditCard className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3 animate-float" />
+        <p className="text-sm text-muted-foreground">No payments yet.</p>
+      </div>
+    );
+  } else {
+    paymentHistoryContent = (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Provider</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Method</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Invoice</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {payments.map((p) => {
+            const inv = invoiceByPaymentId[p.id];
+
+            let paymentStatusBadge: React.ReactNode;
+            if (p.refundedAt) {
+              paymentStatusBadge = <Badge variant="destructive">Refunded</Badge>;
+            } else if (p.paidAt) {
+              paymentStatusBadge = <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Paid</Badge>;
+            } else {
+              paymentStatusBadge = <Badge variant="secondary" className="bg-amber-100 text-amber-700">Pending</Badge>;
+            }
+
+            let invoiceCell: React.ReactNode;
+            if (inv) {
+              invoiceCell = (
+                <div className="flex items-center gap-1.5">
+                  {inv.resolvedAt ? (
+                    <Badge className="bg-green-100 text-green-700 border-green-200 gap-1 text-xs font-medium">
+                      <CheckCircle className="w-3 h-3" /> Resolved
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1 text-xs">
+                      <Clock className="w-3 h-3" /> Requested
+                    </Badge>
+                  )}
+                  {inv.attachmentUrl && (
+                    <a href={inv.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+              );
+            } else if (p.paidAt) {
+              invoiceCell = (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs gap-1"
+                  disabled={requestingForPaymentId === p.id}
+                  onClick={() => handleRequestInvoice(p.id)}
+                >
+                  {requestingForPaymentId === p.id
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Receipt className="w-3 h-3" />}
+                  Request
+                </Button>
+              );
+            } else {
+              invoiceCell = <span className="text-xs text-muted-foreground">—</span>;
+            }
+
+            return (
+              <TableRow key={p.id}>
+                <TableCell className="capitalize text-muted-foreground">{p.provider}</TableCell>
+                <TableCell className="font-bold">{formatCurrency(Number.parseFloat(p.amount || "0"), p.currency)}</TableCell>
+                <TableCell className="capitalize text-muted-foreground">{p.method}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{p.paidAt ? formatDate(p.paidAt) : "—"}</TableCell>
+                <TableCell>{paymentStatusBadge}</TableCell>
+                <TableCell>{invoiceCell}</TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    );
+  }
+
+  let invoiceContent: React.ReactNode;
+  if (invoicesLoading) {
+    invoiceContent = (
+      <div className="space-y-3">
+        {[0, 1, 2].map((n) => (
+          <Skeleton key={n} className="h-18 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  } else if (invoices.length === 0) {
+    invoiceContent = (
+      <div className="text-center py-8">
+        <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3 animate-float" />
+        <p className="text-sm text-muted-foreground">No invoices yet.</p>
+      </div>
+    );
+  } else {
+    invoiceContent = (
+      <div className="space-y-3">
+        {invoices.map((inv, i) => (
+          <div
+            key={inv.id}
+            style={{ animationDelay: `${i * 0.05}s` }}
+            className="animate-fade-in flex items-start justify-between bg-muted rounded-xl p-4 border hover:border-primary/30 transition-all group gap-3"
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">Invoice #{inv.id.slice(-6)}</p>
+                {inv.resolvedAt ? (
+                  <Badge className="bg-green-100 text-green-700 border-green-200 gap-1 text-xs">
+                    <CheckCircle className="w-3 h-3" /> Resolved
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1 text-xs">
+                    <Clock className="w-3 h-3" /> Pending
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Requested: {formatDate(inv.requestedAt)}
+                {inv.resolvedAt && ` · Resolved: ${formatDate(inv.resolvedAt)}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {inv.attachmentUrl && (
+                <Button variant="outline" size="sm" asChild className="h-7 text-xs gap-1">
+                  <a href={inv.attachmentUrl} target="_blank" rel="noopener noreferrer">
+                    <Download className="w-3 h-3" /> Download
+                  </a>
+                </Button>
+              )}
+              {!inv.resolvedAt && isOwner && (
+                isCloudinaryConfigured() ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={resolvingForInvoiceId === inv.id}
+                    onClick={() => {
+                      setPendingResolveInvoiceId(inv.id);
+                      pdfInputRef.current?.click();
+                    }}
+                  >
+                    {resolvingForInvoiceId === inv.id
+                      ? <><Loader2 className="w-3 h-3 animate-spin" /> Uploading…</>
+                      : <><Upload className="w-3 h-3" /> Resolve</>}
+                  </Button>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs text-destructive">
+                    <AlertCircle className="w-3.5 h-3.5" /> Cloudinary not configured
+                  </span>
+                )
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   const stats = [
     { icon: CalendarDays, label: "Payments", value: payments.length, color: "text-primary", bg: "bg-primary/10" },
     { icon: TrendingUp, label: "Total Spent", value: formatCurrency(totalSpent), color: "text-green-600", bg: "bg-green-50" },
@@ -483,19 +687,7 @@ export default function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              {billingAddress ? (
-                <div className="bg-muted rounded-xl p-4 border text-sm text-foreground space-y-0.5">
-                  <p className="font-semibold">{billingAddress.addressLine1}</p>
-                  {billingAddress.addressLine2 && <p>{billingAddress.addressLine2}</p>}
-                  <p>{billingAddress.city}, {billingAddress.state} {billingAddress.postalCode}</p>
-                  <p className="text-muted-foreground">{billingAddress.country}</p>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <MapPin className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3 animate-float" />
-                  <p className="text-sm text-muted-foreground">No billing address on file.</p>
-                </div>
-              )}
+              {billingContent}
             </CardContent>
           </Card>
 
@@ -513,89 +705,7 @@ export default function ProfilePage() {
               </div>
             </CardHeader>
             <CardContent className="pt-6">
-              {payments.length === 0 ? (
-                <div className="text-center py-8">
-                  <CreditCard className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3 animate-float" />
-                  <p className="text-sm text-muted-foreground">No payments yet.</p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Invoice</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payments.map((p) => {
-                      const inv = invoiceByPaymentId[p.id];
-
-                      let paymentStatusBadge: React.ReactNode;
-                      if (p.refundedAt) {
-                        paymentStatusBadge = <Badge variant="destructive">Refunded</Badge>;
-                      } else if (p.paidAt) {
-                        paymentStatusBadge = <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Paid</Badge>;
-                      } else {
-                        paymentStatusBadge = <Badge variant="secondary" className="bg-amber-100 text-amber-700">Pending</Badge>;
-                      }
-
-                      let invoiceCell: React.ReactNode;
-                      if (inv) {
-                        invoiceCell = (
-                          <div className="flex items-center gap-1.5">
-                            {inv.resolvedAt ? (
-                              <Badge className="bg-green-100 text-green-700 border-green-200 gap-1 text-xs font-medium">
-                                <CheckCircle className="w-3 h-3" /> Resolved
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1 text-xs">
-                                <Clock className="w-3 h-3" /> Requested
-                              </Badge>
-                            )}
-                            {inv.attachmentUrl && (
-                              <a href={inv.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                          </div>
-                        );
-                      } else if (p.paidAt) {
-                        invoiceCell = (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-xs gap-1"
-                            disabled={requestingForPaymentId === p.id}
-                            onClick={() => handleRequestInvoice(p.id)}
-                          >
-                            {requestingForPaymentId === p.id
-                              ? <Loader2 className="w-3 h-3 animate-spin" />
-                              : <Receipt className="w-3 h-3" />}
-                            Request
-                          </Button>
-                        );
-                      } else {
-                        invoiceCell = <span className="text-xs text-muted-foreground">—</span>;
-                      }
-
-                      return (
-                        <TableRow key={p.id}>
-                          <TableCell className="capitalize text-muted-foreground">{p.provider}</TableCell>
-                          <TableCell className="font-bold">{formatCurrency(Number.parseFloat(p.amount || "0"), p.currency)}</TableCell>
-                          <TableCell className="capitalize text-muted-foreground">{p.method}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{p.paidAt ? formatDate(p.paidAt) : "—"}</TableCell>
-                          <TableCell>{paymentStatusBadge}</TableCell>
-                          <TableCell>{invoiceCell}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
+              {paymentHistoryContent}
             </CardContent>
           </Card>
 
@@ -621,72 +731,7 @@ export default function ProfilePage() {
                 className="hidden"
                 onChange={handlePdfChange}
               />
-              {invoices.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3 animate-float" />
-                  <p className="text-sm text-muted-foreground">No invoices yet.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {invoices.map((inv, i) => (
-                    <div
-                      key={inv.id}
-                      style={{ animationDelay: `${i * 0.05}s` }}
-                      className="animate-fade-in flex items-start justify-between bg-muted rounded-xl p-4 border hover:border-primary/30 transition-all group gap-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">Invoice #{inv.id.slice(-6)}</p>
-                          {inv.resolvedAt ? (
-                            <Badge className="bg-green-100 text-green-700 border-green-200 gap-1 text-xs">
-                              <CheckCircle className="w-3 h-3" /> Resolved
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1 text-xs">
-                              <Clock className="w-3 h-3" /> Pending
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Requested: {formatDate(inv.requestedAt)}
-                          {inv.resolvedAt && ` · Resolved: ${formatDate(inv.resolvedAt)}`}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {inv.attachmentUrl && (
-                          <Button variant="outline" size="sm" asChild className="h-7 text-xs gap-1">
-                            <a href={inv.attachmentUrl} target="_blank" rel="noopener noreferrer">
-                              <Download className="w-3 h-3" /> Download
-                            </a>
-                          </Button>
-                        )}
-                        {!inv.resolvedAt && isOwner && (
-                          isCloudinaryConfigured() ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs gap-1"
-                              disabled={resolvingForInvoiceId === inv.id}
-                              onClick={() => {
-                                setPendingResolveInvoiceId(inv.id);
-                                pdfInputRef.current?.click();
-                              }}
-                            >
-                              {resolvingForInvoiceId === inv.id
-                                ? <><Loader2 className="w-3 h-3 animate-spin" /> Uploading…</>
-                                : <><Upload className="w-3 h-3" /> Resolve</>}
-                            </Button>
-                          ) : (
-                            <span className="flex items-center gap-1 text-xs text-destructive">
-                              <AlertCircle className="w-3.5 h-3.5" /> Cloudinary not configured
-                            </span>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {invoiceContent}
             </CardContent>
           </Card>
         </div>

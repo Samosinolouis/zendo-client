@@ -443,7 +443,7 @@ function PayoutCard({
 // â”€â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function OwnerPayoutsPage() {
-  const { user, businesses } = useAuth();
+  const { user, businesses, status } = useAuth();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [billingPayoutId, setBillingPayoutId] = useState<string | null>(null);
 
@@ -479,6 +479,42 @@ export default function OwnerPayoutsPage() {
   );
 
   if (!user) return null;
+
+  if (status === "loading") {
+    return (
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="space-y-3">
+          {["owner-payouts-skel-1", "owner-payouts-skel-2", "owner-payouts-skel-3"].map((key) => (
+            <Skeleton key={key} className="h-20 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (businesses.length === 0) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Payouts</h1>
+          <p className="text-muted-foreground mt-1">
+            Review your payout statements and BIR-compliant service billings.
+          </p>
+        </div>
+        <div className="text-center py-20">
+          <Wallet className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-muted-foreground font-medium">No businesses yet</p>
+          <p className="text-sm text-muted-foreground/60 mt-1">
+            Create a business first to generate payout statements.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   function renderContent() {
     if (loading) {

@@ -679,12 +679,12 @@ export default function AppointmentsPage() {
   );
   const appointments = extractNodes(aptData?.serviceAppointments);
 
-  const { data: svcData } = useQuery<{ services: Connection<Service> }>(
+  const { data: svcData, loading: svcLoading } = useQuery<{ services: Connection<Service> }>(
     GET_SERVICES, { first: 200 }, { skip: !user }
   );
   const services = extractNodes(svcData?.services);
 
-  const { data: bizData } = useQuery<{ businesses: Connection<Business> }>(
+  const { data: bizData, loading: bizLoading } = useQuery<{ businesses: Connection<Business> }>(
     GET_BUSINESSES, { first: 200 }, { skip: !user }
   );
   const businesses = extractNodes(bizData?.businesses);
@@ -713,7 +713,9 @@ export default function AppointmentsPage() {
     );
   }
 
-  if (aptLoading) {
+  const isPageLoading = aptLoading || svcLoading || bizLoading;
+
+  if (isPageLoading) {
     return (
       <div className="min-h-screen bg-background">
         <div className="bg-hero px-4 pb-20 pt-12">

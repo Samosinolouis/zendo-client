@@ -14,7 +14,7 @@ import { getInitials } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function BusinessProfilePage({ params }: { params: Promise<{ id: string }> }) {
+export default function BusinessProfilePage({ params }: { readonly params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
   const { data: bizData, loading: bizLoading } = useQuery<{ business: Business }>(
@@ -27,18 +27,18 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ id: 
   );
   const services = extractNodes(svcData?.services);
 
-  const { data: ownerData } = useQuery<{ user: AppUser }>(
+  const { data: ownerData, loading: ownerLoading } = useQuery<{ user: AppUser }>(
     GET_USER, { id: business?.userId ?? "" }, { skip: !business?.userId }
   );
   const owner = ownerData?.user ?? null;
 
   // Aggregate feedbacks for all services
-  const { data: fbData } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
+  const { data: fbData, loading: fbLoading } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
     GET_SERVICE_FEEDBACKS, { first: 100, filter: { businessId: id } }, { skip: !id }
   );
   const allFeedbacks = extractNodes(fbData?.serviceFeedbacks);
 
-  if (bizLoading || svcLoading) {
+  if (bizLoading || svcLoading || ownerLoading || fbLoading) {
     return (
       <div>
         <Skeleton className="h-56 sm:h-72 w-full" />
@@ -46,7 +46,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ id: 
           <Skeleton className="h-6 w-96" />
           <Skeleton className="h-4 w-full max-w-3xl" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-64 rounded-xl" />)}
+            {["service-skel-1", "service-skel-2", "service-skel-3"].map((key) => <Skeleton key={key} className="h-64 rounded-xl" />)}
           </div>
         </div>
       </div>

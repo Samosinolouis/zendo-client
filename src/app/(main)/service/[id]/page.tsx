@@ -400,12 +400,12 @@ export default function ServiceDetailPage({
   );
   const service = svcData?.service ?? null;
 
-  const { data: bizData } = useQuery<{ business: Business }>(
+  const { data: bizData, loading: bizLoading } = useQuery<{ business: Business }>(
     GET_BUSINESS, { id: service?.businessId ?? "" }, { skip: !service }
   );
   const business = bizData?.business ?? null;
 
-  const { data: formData } = useQuery<{ serviceFormByService: ServiceForm | null }>(
+  const { data: formData, loading: formLoading } = useQuery<{ serviceFormByService: ServiceForm | null }>(
     GET_SERVICE_FORM, { serviceId: id }
   );
   const parsedForm = parseFormPayload(
@@ -414,7 +414,7 @@ export default function ServiceDetailPage({
   const fields = parsedForm.fields;
   const formCurrency = parsedForm.currency;
 
-  const { data: pageData } = useQuery<{ servicePageByService: ServicePage | null }>(
+  const { data: pageData, loading: pageLoading } = useQuery<{ servicePageByService: ServicePage | null }>(
     GET_SERVICE_PAGE, { serviceId: id }
   );
   const blogPayload = parsePagePayload(
@@ -429,12 +429,12 @@ export default function ServiceDetailPage({
 
   const hasInlineForm = blogNodes.some((n) => n.type === "serviceForm");
 
-  const { data: availData } = useQuery<{ serviceAvailabilities: ServiceAvailability[] }>(
+  const { data: availData, loading: availLoading } = useQuery<{ serviceAvailabilities: ServiceAvailability[] }>(
     GET_SERVICE_AVAILABILITIES, { serviceId: id, includeAll: false }, { skip: !id }
   );
   const availableSlots = availData?.serviceAvailabilities?.filter((s) => !s.isFull) ?? [];
 
-  const { data: fbData } = useQuery<{
+  const { data: fbData, loading: fbLoading } = useQuery<{
     serviceFeedbacks: Connection<ServiceFeedback>;
   }>(GET_SERVICE_FEEDBACKS, { first: 100, filter: { serviceId: id } });
   const feedbacks = extractNodes(fbData?.serviceFeedbacks);
@@ -454,7 +454,15 @@ export default function ServiceDetailPage({
 
   const [descExpanded, setDescExpanded] = useState(false);
 
-  if (svcLoading) {
+  const isPageLoading =
+    svcLoading ||
+    (service !== null && bizLoading) ||
+    formLoading ||
+    pageLoading ||
+    availLoading ||
+    fbLoading;
+
+  if (isPageLoading) {
     return (
       <div>
         <Skeleton className="h-48 sm:h-64 w-full" />
@@ -818,11 +826,11 @@ function FeedbackCard({
             </div>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            {Array.from({ length: 5 }).map((_, i) => (
+            {[1, 2, 3, 4, 5].map((n) => (
               <Star
-                key={i}
+                key={n}
                 className={`w-4 h-4 ${
-                  i < (feedback.rating ?? 0)
+                  n <= (feedback.rating ?? 0)
                     ? "text-amber-400 fill-amber-400"
                     : "text-muted-foreground/30"
                 }`}

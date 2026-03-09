@@ -78,7 +78,7 @@ interface BusinessFormProps {
   onChange: (patch: Partial<BusinessFormState>) => void;
 }
 
-function BusinessForm({ state, onChange }: BusinessFormProps) {
+function BusinessForm({ state, onChange }: Readonly<BusinessFormProps>) {
   return (
     <div className="space-y-5 py-2">
       {/* Banner image */}
@@ -140,7 +140,7 @@ function BusinessForm({ state, onChange }: BusinessFormProps) {
 // ── Main Page ─────────────────────────────────────────────────
 
 export default function OwnerBusinessesPage() {
-  const { user, businesses, refreshBusinesses } = useAuth();
+  const { user, businesses, refreshBusinesses, status } = useAuth();
   const { showSuccess, showError } = useToast();
 
   // ── Dialog state ───────────────────────────────────────
@@ -189,6 +189,31 @@ export default function OwnerBusinessesPage() {
   });
 
   if (!user) return null;
+
+  if (status === "loading") {
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-8 w-36 bg-muted rounded animate-pulse" />
+            <div className="h-4 w-80 bg-muted rounded animate-pulse" />
+          </div>
+          <div className="h-9 w-32 bg-muted rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {["owner-biz-skel-1", "owner-biz-skel-2", "owner-biz-skel-3"].map((key) => (
+            <Card key={key} className="overflow-hidden border-0 shadow-sm">
+              <div className="h-36 bg-muted animate-pulse" />
+              <CardContent className="p-5 space-y-2">
+                <div className="h-5 w-2/3 bg-muted animate-pulse rounded" />
+                <div className="h-4 w-full bg-muted animate-pulse rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   // ── Handlers ───────────────────────────────────────────
 

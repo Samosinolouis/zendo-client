@@ -306,7 +306,7 @@ function formatPrice(min?: number | null, max?: number | null): string | null {
 type ServiceWithBizName = Service & { businessName: string };
 
 export default function OwnerServicesPage() {
-  const { user, businesses } = useAuth();
+  const { user, businesses, status } = useAuth();
   const { showSuccess, showError } = useToast();
 
   // Dialog state
@@ -356,6 +356,50 @@ export default function OwnerServicesPage() {
   });
 
   if (!user) return null;
+
+  if (status === "loading") {
+    return (
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <div className="h-8 w-32 bg-muted rounded animate-pulse" />
+          <div className="h-4 w-72 bg-muted rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {["owner-services-skel-1", "owner-services-skel-2", "owner-services-skel-3"].map((key) => (
+            <Card key={key} className="overflow-hidden border-0 shadow-sm">
+              <div className="h-36 bg-muted animate-pulse" />
+              <CardContent className="p-5 space-y-2">
+                <div className="h-5 w-2/3 bg-muted animate-pulse rounded" />
+                <div className="h-4 w-1/2 bg-muted animate-pulse rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (businesses.length === 0) {
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Services</h1>
+            <p className="text-muted-foreground mt-1">Manage the services your businesses offer</p>
+          </div>
+        </div>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <Wrench className="w-12 h-12 text-muted-foreground/40 mb-4" />
+            <p className="text-lg font-medium text-foreground mb-1">No businesses yet</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Create a business first, then add services for it.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Handlers
 

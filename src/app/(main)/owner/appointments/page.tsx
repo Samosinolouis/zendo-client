@@ -377,7 +377,7 @@ export default function OwnerAppointmentsPage() {
 
   const bizIds = useMemo(() => businesses.map((b) => b.id), [businesses]);
 
-  const { data: svcData } = useQuery<{ services: Connection<Service> }>(
+  const { data: svcData, loading: svcLoading } = useQuery<{ services: Connection<Service> }>(
     GET_SERVICES, { first: 200 }, { skip: !user }
   );
   const allServicesRaw = extractNodes(svcData?.services);
@@ -403,10 +403,12 @@ export default function OwnerAppointmentsPage() {
     return all.filter((a) => serviceIds.includes(a.serviceId));
   }, [aptData, serviceIds]);
 
+  const isPageLoading = svcLoading || (serviceIds.length > 0 && loading);
+
   if (!user) return null;
 
   function renderContent() {
-    if (loading) {
+    if (isPageLoading) {
       return (
         <div className="space-y-3">
           {[0, 1, 2, 3].map((n) => (

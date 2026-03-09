@@ -100,7 +100,7 @@ export default function SettingsPage() {
   const address = extractNodes(addrData?.billingAddresses)[0] ?? null;
 
   // ── User Preference ────────────────────────────────
-  const { data: userData, refetch: refetchPref } = useQuery<{
+  const { data: userData, loading: prefQueryLoading, refetch: refetchPref } = useQuery<{
     user: { userPreference: UserPreference | null };
   }>(GET_USER, { id: user?.id }, { skip: !user });
   const pref = userData?.user?.userPreference ?? null;
@@ -111,7 +111,7 @@ export default function SettingsPage() {
   const [prefEvents, setPrefEvents] = useState<Set<string>>(new Set(ALL_KEYS));
   const [allEvents, setAllEvents] = useState<boolean>(true);
   const [prefMsg, setPrefMsg] = useState<string | null>(null);
-  const { mutate: updatePref, loading: prefLoading } = useMutation<{
+  const { mutate: updatePref, loading: prefSaving } = useMutation<{
     updateUserPreference: { userPreference: UserPreference };
   }>(UPDATE_USER_PREFERENCE);
 
@@ -185,6 +185,89 @@ export default function SettingsPage() {
       setAddrMsg("Failed to update billing address.");
     }
   };
+
+  let billingAddressContent: React.ReactNode;
+  if (addrLoading) {
+    billingAddressContent = (
+      <div className="space-y-3">
+        {["addr-skel-1", "addr-skel-2", "addr-skel-3"].map((key) => (
+          <Skeleton key={key} className="h-10 rounded-md" />
+        ))}
+      </div>
+    );
+  } else if (address) {
+    billingAddressContent = (
+      <>
+        <div className="space-y-2">
+          <Label htmlFor="addr-line1">Address Line 1</Label>
+          <Input
+            id="addr-line1"
+            value={addrFields.addressLine1}
+            onChange={(e) => handleAddrChange("addressLine1", e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="addr-line2">Address Line 2</Label>
+          <Input
+            id="addr-line2"
+            value={addrFields.addressLine2}
+            onChange={(e) => handleAddrChange("addressLine2", e.target.value)}
+            placeholder="Apt, suite, etc. (optional)"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="addr-city">City</Label>
+            <Input
+              id="addr-city"
+              value={addrFields.city}
+              onChange={(e) => handleAddrChange("city", e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="addr-state">State / Province</Label>
+            <Input
+              id="addr-state"
+              value={addrFields.state}
+              onChange={(e) => handleAddrChange("state", e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="addr-postal">Postal Code</Label>
+            <Input
+              id="addr-postal"
+              value={addrFields.postalCode}
+              onChange={(e) => handleAddrChange("postalCode", e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="addr-country">Country</Label>
+            <Input
+              id="addr-country"
+              value={addrFields.country}
+              onChange={(e) => handleAddrChange("country", e.target.value)}
+            />
+          </div>
+        </div>
+        {addrMsg && (
+          <p className={`text-sm flex items-center gap-1 ${addrMsg.includes("Failed") ? "text-red-600" : "text-emerald-600"}`}>
+            {addrMsg.includes("Failed") ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+            {addrMsg}
+          </p>
+        )}
+        <Button onClick={handleAddrSave} disabled={addrSaving} className="gap-2">
+          <Save className="w-4 h-4" />
+          {addrSaving ? "Saving…" : "Update Address"}
+        </Button>
+      </>
+    );
+  } else {
+    billingAddressContent = (
+      <p className="text-sm text-muted-foreground">No billing address on file. Complete onboarding to set one up.</p>
+    );
+  }
 
   if (!isLoggedIn) {
     return (
@@ -303,97 +386,107 @@ export default function SettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Enable Notifications</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Receive updates about your appointments and activity</p>
+          {prefQueryLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-10 w-40" />
+              <Skeleton className="h-20 w-full" />
             </div>
-            <Switch
-              checked={prefEnabled}
-              onCheckedChange={(v) => {
-                setPrefEnabled(v);
-                setPrefMsg(null);
-              }}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="pref-method">Notification Method</Label>
-            <Select
-              value={prefMethod}
-              onValueChange={(v) => {
-                setPrefMethod(v as "EMAIL" | "SMS");
-                setPrefMsg(null);
-              }}
-            >
-              <SelectTrigger id="pref-method" className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="EMAIL">Email</SelectItem>
-                <SelectItem value="SMS">SMS</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label>Events to receive</Label>
-              <button
-                type="button"
-                onClick={() => {
-                  setAllEvents((prev) => {
-                    if (!prev) setPrefEvents(new Set(ALL_KEYS));
-                    return !prev;
-                  });
-                  setPrefMsg(null);
-                }}
-                className="text-xs text-primary underline underline-offset-2"
-              >
-                {allEvents ? "Customise" : "Subscribe to all"}
-              </button>
-            </div>
-            {allEvents ? (
-              <p className="text-xs text-muted-foreground">All events will be delivered.</p>
-            ) : (
-              <div className="space-y-2">
-                {NOTIFICATION_EVENTS.map((evt) => (
-                  <label
-                    key={evt.key}
-                    className="flex items-start gap-3 cursor-pointer group"
-                  >
-                    <Checkbox
-                      checked={prefEvents.has(evt.key)}
-                      onCheckedChange={(checked) => {
-                        setPrefEvents((prev) => {
-                          const next = new Set(prev);
-                          if (checked) next.add(evt.key);
-                          else next.delete(evt.key);
-                          return next;
-                        });
-                        setPrefMsg(null);
-                      }}
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{evt.label}</p>
-                      <p className="text-xs text-muted-foreground">{evt.description}</p>
-                    </div>
-                  </label>
-                ))}
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Enable Notifications</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Receive updates about your appointments and activity</p>
+                </div>
+                <Switch
+                  checked={prefEnabled}
+                  onCheckedChange={(v) => {
+                    setPrefEnabled(v);
+                    setPrefMsg(null);
+                  }}
+                />
               </div>
-            )}
-          </div>
-          {prefMsg && (
-            <p className={`text-sm flex items-center gap-1 ${prefMsg.includes("Failed") ? "text-red-600" : "text-emerald-600"}`}>
-              {prefMsg.includes("Failed") ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-              {prefMsg}
-            </p>
-          )}
-          <Button onClick={handlePrefSave} disabled={prefLoading || !pref} className="gap-2">
-            <Save className="w-4 h-4" />
-            {prefLoading ? "Saving…" : "Save Preferences"}
-          </Button>
-          {!pref && (
-            <p className="text-xs text-muted-foreground">Preferences not yet set up. Complete onboarding to enable this.</p>
+              <div className="space-y-2">
+                <Label htmlFor="pref-method">Notification Method</Label>
+                <Select
+                  value={prefMethod}
+                  onValueChange={(v) => {
+                    setPrefMethod(v as "EMAIL" | "SMS");
+                    setPrefMsg(null);
+                  }}
+                >
+                  <SelectTrigger id="pref-method" className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EMAIL">Email</SelectItem>
+                    <SelectItem value="SMS">SMS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Events to receive</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAllEvents((prev) => {
+                        if (!prev) setPrefEvents(new Set(ALL_KEYS));
+                        return !prev;
+                      });
+                      setPrefMsg(null);
+                    }}
+                    className="text-xs text-primary underline underline-offset-2"
+                  >
+                    {allEvents ? "Customise" : "Subscribe to all"}
+                  </button>
+                </div>
+                {allEvents ? (
+                  <p className="text-xs text-muted-foreground">All events will be delivered.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {NOTIFICATION_EVENTS.map((evt) => (
+                      <label
+                        key={evt.key}
+                        className="flex items-start gap-3 cursor-pointer group"
+                      >
+                        <Checkbox
+                          checked={prefEvents.has(evt.key)}
+                          onCheckedChange={(checked) => {
+                            setPrefEvents((prev) => {
+                              const next = new Set(prev);
+                              if (checked) next.add(evt.key);
+                              else next.delete(evt.key);
+                              return next;
+                            });
+                            setPrefMsg(null);
+                          }}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{evt.label}</p>
+                          <p className="text-xs text-muted-foreground">{evt.description}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {prefMsg && (
+                <p className={`text-sm flex items-center gap-1 ${prefMsg.includes("Failed") ? "text-red-600" : "text-emerald-600"}`}>
+                  {prefMsg.includes("Failed") ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {prefMsg}
+                </p>
+              )}
+              <Button onClick={handlePrefSave} disabled={prefSaving || !pref} className="gap-2">
+                <Save className="w-4 h-4" />
+                {prefSaving ? "Saving…" : "Save Preferences"}
+              </Button>
+              {!pref && (
+                <p className="text-xs text-muted-foreground">Preferences not yet set up. Complete onboarding to enable this.</p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -407,81 +500,7 @@ export default function SettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {addrLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 rounded-md" />
-              ))}
-            </div>
-          ) : !address ? (
-            <p className="text-sm text-muted-foreground">No billing address on file. Complete onboarding to set one up.</p>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="addr-line1">Address Line 1</Label>
-                <Input
-                  id="addr-line1"
-                  value={addrFields.addressLine1}
-                  onChange={(e) => handleAddrChange("addressLine1", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="addr-line2">Address Line 2</Label>
-                <Input
-                  id="addr-line2"
-                  value={addrFields.addressLine2}
-                  onChange={(e) => handleAddrChange("addressLine2", e.target.value)}
-                  placeholder="Apt, suite, etc. (optional)"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="addr-city">City</Label>
-                  <Input
-                    id="addr-city"
-                    value={addrFields.city}
-                    onChange={(e) => handleAddrChange("city", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="addr-state">State / Province</Label>
-                  <Input
-                    id="addr-state"
-                    value={addrFields.state}
-                    onChange={(e) => handleAddrChange("state", e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="addr-postal">Postal Code</Label>
-                  <Input
-                    id="addr-postal"
-                    value={addrFields.postalCode}
-                    onChange={(e) => handleAddrChange("postalCode", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="addr-country">Country</Label>
-                  <Input
-                    id="addr-country"
-                    value={addrFields.country}
-                    onChange={(e) => handleAddrChange("country", e.target.value)}
-                  />
-                </div>
-              </div>
-              {addrMsg && (
-                <p className={`text-sm flex items-center gap-1 ${addrMsg.includes("Failed") ? "text-red-600" : "text-emerald-600"}`}>
-                  {addrMsg.includes("Failed") ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                  {addrMsg}
-                </p>
-              )}
-              <Button onClick={handleAddrSave} disabled={addrSaving} className="gap-2">
-                <Save className="w-4 h-4" />
-                {addrSaving ? "Saving…" : "Update Address"}
-              </Button>
-            </>
-          )}
+          {billingAddressContent}
         </CardContent>
       </Card>
     </div>

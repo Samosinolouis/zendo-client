@@ -16,9 +16,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Star, MessageSquare } from "lucide-react";
 
 /** Lazy-loads reviewer user info */
-function ReviewerRow({ userId, createdAt }: { userId: string; createdAt?: string }) {
+function ReviewerRow({ userId, createdAt }: { readonly userId: string; readonly createdAt?: string }) {
   const { data } = useQuery<{ user: User }>(GET_USER, { id: userId });
   const reviewer = data?.user ?? null;
+
   return (
     <div className="flex items-center gap-3 min-w-0">
       <Avatar className="h-10 w-10">
@@ -43,7 +44,7 @@ export default function OwnerFeedbacksPage() {
   const bizIds = useMemo(() => businesses.map((b) => b.id), [businesses]);
 
   // Fetch services for name lookup
-  const { data: svcData } = useQuery<{ services: Connection<Service> }>(
+  const { data: svcData, loading: svcLoading } = useQuery<{ services: Connection<Service> }>(
     GET_SERVICES, { first: 200 }, { skip: !user }
   );
   const allServicesRaw = extractNodes(svcData?.services);
@@ -59,9 +60,11 @@ export default function OwnerFeedbacksPage() {
   const serviceIds = useMemo(() => ownerServices.map((s) => s.id), [ownerServices]);
 
   // Fetch feedbacks
-  const { data: fbData, loading } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
+  const { data: fbData, loading: fbLoading } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
     GET_SERVICE_FEEDBACKS, { first: 200 }, { skip: serviceIds.length === 0 }
   );
+    const isPageLoading = svcLoading || (serviceIds.length > 0 && fbLoading);
+
   const allFeedbacks = useMemo(() => {
     const all = extractNodes(fbData?.serviceFeedbacks);
     return all.filter((f) => serviceIds.includes(f.serviceId));
@@ -73,6 +76,82 @@ export default function OwnerFeedbacksPage() {
     allFeedbacks.length > 0
       ? (allFeedbacks.reduce((s, f) => s + (f.rating ?? 0), 0) / allFeedbacks.length).toFixed(1)
       : "—";
+
+  let feedbackContent: React.ReactNode;
+  if (isPageLoading) {
+    feedbackContent = (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {["feedback-skel-1", "feedback-skel-2", "feedback-skel-3", "feedback-skel-4"].map((key) => (
+          <Skeleton key={key} className="h-48 rounded-xl" />
+        ))}
+      </div>
+    );
+  } else if (allFeedbacks.length === 0) {
+    feedbackContent = (
+      <Card className="border-0 shadow-sm">
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <MessageSquare className="w-12 h-12 text-muted-foreground/40 mb-4" />
+          <p className="text-lg font-medium text-foreground mb-1">No feedback yet</p>
+          <p className="text-sm text-muted-foreground">Customer reviews will appear here.</p>
+        </CardContent>
+      </Card>
+    );
+  } else {
+    feedbackContent = (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {allFeedbacks.map((fb) => {
+          const svc = svcMap[fb.serviceId];
+          const payload = fb.payload as Record<string, unknown> | null;
+          const title = (payload as { title?: string } | null)?.title;
+          const body = (payload as { body?: string } | null)?.body;
+
+          return (
+            <Card key={fb.id} className="border-0 shadow-sm">
+              <CardContent className="p-5 space-y-4">
+                {/* Reviewer row */}
+                <div className="flex items-center justify-between gap-3">
+                  <ReviewerRow userId={fb.userId} createdAt={fb.createdAt} />
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        className={`w-4 h-4 ${
+                          n <= (fb.rating ?? 0)
+                            ? "text-amber-400 fill-amber-400"
+                            : "text-muted-foreground/30"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Service badge */}
+                {svc && (
+                  <Badge variant="secondary" className="text-xs">
+                    {svc.name}
+                  </Badge>
+                )}
+
+                {/* Content */}
+                {payload?.type === "doc" && Array.isArray(payload.content) ? (
+                  <div className="space-y-2">
+                    {(payload.content as PageNode[]).map((node) => (
+                      <NodePreview key={node.id} node={node} />
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">{title ?? "Untitled"}</h4>
+                    {body && <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{body}</p>}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -99,74 +178,7 @@ export default function OwnerFeedbacksPage() {
       </div>
 
       {/* Feedback list */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 rounded-xl" />
-          ))}
-        </div>
-      ) : allFeedbacks.length === 0 ? (
-        <Card className="border-0 shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <MessageSquare className="w-12 h-12 text-muted-foreground/40 mb-4" />
-            <p className="text-lg font-medium text-foreground mb-1">No feedback yet</p>
-            <p className="text-sm text-muted-foreground">Customer reviews will appear here.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {allFeedbacks.map((fb) => {
-            const svc = svcMap[fb.serviceId];
-            const payload = fb.payload as Record<string, unknown> | null;
-            const title = (payload as { title?: string } | null)?.title;
-            const body = (payload as { body?: string } | null)?.body;
-
-            return (
-              <Card key={fb.id} className="border-0 shadow-sm">
-                <CardContent className="p-5 space-y-4">
-                  {/* Reviewer row */}
-                  <div className="flex items-center justify-between gap-3">
-                    <ReviewerRow userId={fb.userId} createdAt={fb.createdAt} />
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`w-4 h-4 ${
-                            i < (fb.rating ?? 0)
-                              ? "text-amber-400 fill-amber-400"
-                              : "text-muted-foreground/30"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Service badge */}
-                  {svc && (
-                    <Badge variant="secondary" className="text-xs">
-                      {svc.name}
-                    </Badge>
-                  )}
-
-                  {/* Content */}
-                  {payload?.type === "doc" && Array.isArray(payload.content) ? (
-                    <div className="space-y-2">
-                      {(payload.content as PageNode[]).map((node) => (
-                        <NodePreview key={node.id} node={node} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground">{title ?? "Untitled"}</h4>
-                      {body && <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{body}</p>}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+      {feedbackContent}
     </div>
   );
 }

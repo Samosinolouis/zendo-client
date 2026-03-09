@@ -345,7 +345,7 @@ function InvoicesSheet({
 // ─── Main page ─────────────────────────────────────────────────
 
 export default function OwnerPayments() {
-  const { user, businesses } = useAuth();
+  const { user, businesses, status } = useAuth();
   const [selectedBizId, setSelectedBizId] = useState("");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
@@ -360,6 +360,40 @@ export default function OwnerPayments() {
   const payments = useMemo(() => extractNodes(data?.payments), [data]);
 
   if (!user) return null;
+
+  if (status === "loading") {
+    return (
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="space-y-2">
+          {["owner-payments-skel-1", "owner-payments-skel-2", "owner-payments-skel-3", "owner-payments-skel-4"].map((key) => (
+            <Skeleton key={key} className="h-12 w-full rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (businesses.length === 0) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Payments</h1>
+          <p className="text-muted-foreground mt-1">Read-only record of all payments received.</p>
+        </div>
+        <div className="text-center py-20">
+          <CreditCard className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-muted-foreground font-medium">No businesses yet</p>
+          <p className="text-sm text-muted-foreground/60 mt-1">
+            Create a business first to start receiving payments.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   function renderContent() {
     if (loading) {
