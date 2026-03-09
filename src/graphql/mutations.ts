@@ -271,6 +271,31 @@ export const CANCEL_SERVICE_APPOINTMENT = /* GraphQL */ `
   }
 `;
 
+export const COMPLETE_SERVICE_APPOINTMENT = /* GraphQL */ `
+  mutation CompleteServiceAppointment($id: ID!) {
+    completeServiceAppointment(id: $id) {
+      serviceAppointment {
+        id
+        completedAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const COMPLETE_SERVICE_APPOINTMENT_BY_BUSINESS = /* GraphQL */ `
+  mutation CompleteServiceAppointmentByBusiness($id: ID!, $input: CompleteServiceAppointmentByBusinessInput!) {
+    completeServiceAppointmentByBusiness(id: $id, input: $input) {
+      serviceAppointment {
+        id
+        completedAt
+        completedProofUrl
+        updatedAt
+      }
+    }
+  }
+`;
+
 // ── Service Feedback ──────────────────────────────────────────
 
 export const CREATE_SERVICE_FEEDBACK = /* GraphQL */ `

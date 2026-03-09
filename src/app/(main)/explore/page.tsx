@@ -67,12 +67,14 @@ export default function ExplorePage() {
       {/* Hero with parallax */}
       <div
         ref={heroRef}
-        className="relative overflow-hidden bg-hero min-h-110 flex flex-col items-center justify-center px-4 pb-24 pt-16"
-        style={{ backgroundPositionY: scrollY * 0.4 }}
-      >
-        <div className="absolute top-10 left-10 w-72 h-72 bg-primary/20 rounded-full filter blur-3xl animate-blob pointer-events-none" />
-        <div className="absolute bottom-0 right-20 w-80 h-80 bg-primary/15 rounded-full filter blur-3xl animate-blob pointer-events-none" style={{ animationDelay: "2s" }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/10 rounded-full filter blur-3xl animate-blob pointer-events-none" style={{ animationDelay: "4s" }} />
+className="relative bg-hero min-h-110 flex flex-col items-center justify-center px-4 pb-24 pt-16"
+      style={{ backgroundPositionY: scrollY * 0.4 }}
+    >
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-10 left-10 w-72 h-72 bg-primary/20 rounded-full filter blur-3xl animate-blob" />
+          <div className="absolute bottom-0 right-20 w-80 h-80 bg-primary/15 rounded-full filter blur-3xl animate-blob" style={{ animationDelay: "2s" }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/10 rounded-full filter blur-3xl animate-blob" style={{ animationDelay: "4s" }} />
+        </div>
 
         <div className="relative animate-fade-in">
           <Badge variant="secondary" className="bg-white/10 border-white/20 text-white/80 mb-5">
@@ -125,8 +127,8 @@ export default function ExplorePage() {
         </div>
 
         {/* Wave bottom */}
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-          <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
+        <div className="absolute -bottom-0.5 left-0 right-0 pointer-events-none">
+          <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
             <path d="M0 60L1440 60L1440 20C1200 60 900 0 720 20C540 40 240 0 0 20L0 60Z" className="fill-background" />
           </svg>
         </div>

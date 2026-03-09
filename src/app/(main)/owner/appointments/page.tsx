@@ -1,15 +1,17 @@
 ﻿"use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_SERVICES, GET_SERVICE_APPOINTMENTS, GET_USER } from "@/graphql/queries";
 import {
   APPROVE_SERVICE_APPOINTMENT,
   REJECT_SERVICE_APPOINTMENT,
+  COMPLETE_SERVICE_APPOINTMENT_BY_BUSINESS,
 } from "@/graphql/mutations";
 import type { Service, ServiceAppointment, User, Connection } from "@/types";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,18 +29,27 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { CalendarCheck, Check, X, Eye, Loader2 } from "lucide-react";
+import { CalendarCheck, Check, X, Eye, Loader2, CheckCheck, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // ── Status helpers ─────────────────────────────────────────────
 
-type AptStatus = "paid" | "approved" | "rejected" | "cancelled" | "pending";
+type AptStatus = "paid" | "approved" | "rejected" | "cancelled" | "pending" | "completed" | "for_completion";
 
 function getStatus(apt: ServiceAppointment): AptStatus {
   if (apt.canceledAt) return "cancelled";
+  if (apt.completedAt) {
+    return new Date(apt.completedAt) <= new Date() ? "completed" : "for_completion";
+  }
   if (apt.approvedAt) return "approved";
   if (apt.rejectedAt) return "rejected";
   if (apt.paidAt) return "paid";
@@ -46,19 +57,23 @@ function getStatus(apt: ServiceAppointment): AptStatus {
 }
 
 const STATUS_BADGE: Record<AptStatus, string> = {
-  paid:      "bg-blue-100 text-blue-800",
-  approved:  "bg-green-100 text-green-800",
-  rejected:  "bg-red-100 text-red-800",
-  cancelled: "bg-gray-100 text-gray-700",
-  pending:   "bg-yellow-100 text-yellow-800",
+  paid:           "bg-blue-100 text-blue-800",
+  approved:       "bg-green-100 text-green-800",
+  rejected:       "bg-red-100 text-red-800",
+  cancelled:      "bg-gray-100 text-gray-700",
+  pending:        "bg-yellow-100 text-yellow-800",
+  completed:      "bg-purple-100 text-purple-800",
+  for_completion: "bg-orange-100 text-orange-800",
 };
 
 const STATUS_LABEL: Record<AptStatus, string> = {
-  paid:      "Paid",
-  approved:  "Approved",
-  rejected:  "Rejected",
-  cancelled: "Cancelled",
-  pending:   "Pending",
+  paid:           "Paid",
+  approved:       "Approved",
+  rejected:       "Rejected",
+  cancelled:      "Cancelled",
+  pending:        "Pending",
+  completed:      "Completed",
+  for_completion: "For Completion",
 };
 
 // ── Payload field shape ────────────────────────────────────────
@@ -133,6 +148,10 @@ function ActionsCell({
 }) {
   const status = getStatus(apt);
 
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [proofUrl, setProofUrl] = useState<string>("");
+
   const { mutate: approve, loading: approving } = useMutation<{
     approveServiceAppointment: { serviceAppointment: { id: string; approvedAt: string } };
   }>(APPROVE_SERVICE_APPOINTMENT, { onCompleted: refetch });
@@ -141,22 +160,60 @@ function ActionsCell({
     rejectServiceAppointment: { serviceAppointment: { id: string; rejectedAt: string } };
   }>(REJECT_SERVICE_APPOINTMENT, { onCompleted: refetch });
 
-  const payload = parseAptPayload(apt.payload);
+  const { mutate: completeByBusiness, loading: completing } = useMutation<{
+    completeServiceAppointmentByBusiness: { serviceAppointment: { id: string; completedAt: string; completedProofUrl: string } };
+  }>(COMPLETE_SERVICE_APPOINTMENT_BY_BUSINESS, {
+    onCompleted: () => { refetch(); setCompleteDialogOpen(false); setProofUrl(""); },
+  });
 
-  // Final states show only the details button
-  const isFinal = status === "approved" || status === "rejected" || status === "cancelled";
-  const busy = approving || rejecting;
+  const payload = parseAptPayload(apt.payload);
+  const busy = approving || rejecting || completing;
 
   return (
-    <div className="flex items-center gap-1.5">
-      {/* Details dialog */}
-      <Dialog>
-        <DialogTrigger asChild>
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1">
-            <Eye className="w-3 h-3" />
-            Details
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={busy}>
+            {busy
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <MoreHorizontal className="w-4 h-4" />}
           </Button>
-        </DialogTrigger>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={() => setDetailsOpen(true)}>
+            <Eye className="w-3.5 h-3.5 mr-2" />
+            View Details
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="text-green-700 focus:text-green-700 focus:bg-green-50"
+            disabled={status !== "paid"}
+            onClick={() => approve({ id: apt.id })}
+          >
+            <Check className="w-3.5 h-3.5 mr-2" />
+            Mark as Approved
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-red-700 focus:text-red-700 focus:bg-red-50"
+            disabled={status !== "paid"}
+            onClick={() => reject({ id: apt.id })}
+          >
+            <X className="w-3.5 h-3.5 mr-2" />
+            Mark as Rejected
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-purple-700 focus:text-purple-700 focus:bg-purple-50"
+            disabled={status !== "approved"}
+            onClick={() => setCompleteDialogOpen(true)}
+          >
+            <CheckCheck className="w-3.5 h-3.5 mr-2" />
+            Mark as Completed
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Details dialog */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Appointment Details</DialogTitle>
@@ -196,6 +253,27 @@ function ActionsCell({
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Cancelled at</span>
                 <span>{formatDate(apt.canceledAt)}</span>
+              </div>
+            )}
+            {apt.completedAt && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  {new Date(apt.completedAt) > new Date() ? "Completion deadline" : "Completed at"}
+                </span>
+                <span>{formatDate(apt.completedAt)}</span>
+              </div>
+            )}
+            {apt.completedProofUrl && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Proof</span>
+                <a
+                  href={apt.completedProofUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline underline-offset-2 break-all text-right max-w-[60%]"
+                >
+                  View proof
+                </a>
               </div>
             )}
 
@@ -251,35 +329,44 @@ function ActionsCell({
         </DialogContent>
       </Dialog>
 
-      {/* Transition actions — only for Paid status */}
-      {status === "paid" && (
-        <>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50 hover:text-green-800"
-            disabled={busy}
-            onClick={() => approve({ id: apt.id })}
-          >
-            {approving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 px-2 text-xs text-red-700 border-red-200 hover:bg-red-50 hover:text-red-800"
-            disabled={busy}
-            onClick={() => reject({ id: apt.id })}
-          >
-            {rejecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-          </Button>
-        </>
-      )}
-
-      {/* Final state tooltip hints */}
-      {isFinal && (
-        <span className="text-xs text-muted-foreground italic">Final</span>
-      )}
-    </div>
+      {/* Complete dialog */}
+      <Dialog open={completeDialogOpen} onOpenChange={(open) => { setCompleteDialogOpen(open); if (!open) setProofUrl(""); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark as Completed</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 text-sm py-1">
+            <p className="text-muted-foreground">
+              Upload proof of service completion. The customer will have 7&nbsp;days to confirm.
+            </p>
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-foreground">Proof Image *</p>
+              <ImageUpload
+                value={proofUrl || undefined}
+                onChange={(url) => setProofUrl(url)}
+                onRemove={() => setProofUrl("")}
+                aspect="auto"
+                folder="zendo/proofs"
+                label="Upload Proof Image"
+              />
+              <p className="text-xs text-muted-foreground">
+                PNG, JPG, or PDF screenshot — max 10 MB.
+              </p>
+            </div>
+            <Separator />
+            <Button
+              className="w-full"
+              disabled={!proofUrl || completing}
+              onClick={() => completeByBusiness({ id: apt.id, input: { completedProofUrl: proofUrl } })}
+            >
+              {completing
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Submitting…</>
+                : <><CheckCheck className="w-4 h-4 mr-2" /> Submit Completion</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

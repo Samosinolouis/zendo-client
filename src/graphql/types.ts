@@ -279,6 +279,21 @@ export type CancelServiceAppointmentPayload = {
   serviceAppointment: ServiceAppointment;
 };
 
+export type CompleteServiceAppointmentByBusinessInput = {
+  /** URL of proof of the completed appointment (e.g. photo, document) */
+  completedProofUrl: Scalars['String']['input'];
+};
+
+export type CompleteServiceAppointmentByBusinessPayload = {
+  __typename?: 'CompleteServiceAppointmentByBusinessPayload';
+  serviceAppointment: ServiceAppointment;
+};
+
+export type CompleteServiceAppointmentPayload = {
+  __typename?: 'CompleteServiceAppointmentPayload';
+  serviceAppointment: ServiceAppointment;
+};
+
 export type CreateBusinessFeedbackInput = {
   businessId: Scalars['ID']['input'];
   payload: Scalars['JSON']['input'];
@@ -477,6 +492,17 @@ export type Mutation = {
   cancelPaymentLink: CancelPaymentLinkPayload;
   /** Cancel a service appointment (requires authentication) */
   cancelServiceAppointment: CancelServiceAppointmentPayload;
+  /**
+   * Mark a service appointment as completed by the customer.
+   * Sets completedAt = now(). Can finalize a pending business-owner completion.
+   */
+  completeServiceAppointment: CompleteServiceAppointmentPayload;
+  /**
+   * Mark a service appointment as completed by the business owner.
+   * Requires a proof URL. Sets completedAt = now() + 7 days.
+   * The appointment will appear as TO_BE_COMPLETED to the customer until they confirm.
+   */
+  completeServiceAppointmentByBusiness: CompleteServiceAppointmentByBusinessPayload;
   /** Create a new business (requires authentication) */
   createBusiness: CreateBusinessPayload;
   /** Submit a feedback/review for a business (requires authentication) */
@@ -564,6 +590,17 @@ export type MutationCancelPaymentLinkArgs = {
 
 export type MutationCancelServiceAppointmentArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationCompleteServiceAppointmentArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationCompleteServiceAppointmentByBusinessArgs = {
+  id: Scalars['ID']['input'];
+  input: CompleteServiceAppointmentByBusinessInput;
 };
 
 
@@ -1544,6 +1581,15 @@ export type ServiceAppointment = Node & {
   businessId: Scalars['ID']['output'];
   /** When the appointment was cancelled (null if active) */
   canceledAt?: Maybe<Scalars['DateTime']['output']>;
+  /**
+   * When the appointment was completed.
+   * - null: not yet completed
+   * - future date: business owner has flagged it as complete (7-day confirmation window); status is TO_BE_COMPLETED
+   * - past/current date: fully completed
+   */
+  completedAt?: Maybe<Scalars['DateTime']['output']>;
+  /** URL of the proof submitted by the business owner when marking the appointment complete */
+  completedProofUrl?: Maybe<Scalars['String']['output']>;
   /** When the record was created */
   createdAt: Scalars['DateTime']['output'];
   /** ID of the user who created this record */

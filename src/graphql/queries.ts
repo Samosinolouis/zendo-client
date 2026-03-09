@@ -256,6 +256,8 @@ export const GET_SERVICE_APPOINTMENTS = /* GraphQL */ `
           canceledAt
           approvedAt
           rejectedAt
+          completedAt
+          completedProofUrl
           createdBy
           createdAt
           updatedAt

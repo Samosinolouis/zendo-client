@@ -34,8 +34,8 @@ export default function HomePage() {
   return (
     <div className="bg-background overflow-x-hidden">
       {/* ── Hero ── */}
-      <section className="relative min-h-[90vh] flex items-center bg-hero overflow-hidden">
-        <div aria-hidden className="absolute inset-0 pointer-events-none">
+      <section className="relative min-h-[90vh] flex items-center bg-hero">
+        <div aria-hidden className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 left-[10%] w-72 h-72 bg-primary/20 rounded-full blur-3xl animate-blob" />
           <div className="absolute top-1/2 right-[15%] w-96 h-96 bg-primary/15 rounded-full blur-3xl animate-blob" style={{ animationDelay: "2s" }} />
           <div className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-primary/20 rounded-full blur-3xl animate-blob" style={{ animationDelay: "4s" }} />
@@ -154,8 +154,8 @@ export default function HomePage() {
         </div>
 
         {/* Wave */}
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div className="absolute -bottom-0.5 left-0 right-0">
+          <svg viewBox="0 0 1440 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
             <path d="M0 80L1440 80L1440 20C1200 60 720 0 0 50L0 80Z" className="fill-background" />
           </svg>
         </div>

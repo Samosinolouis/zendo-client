@@ -129,11 +129,13 @@ export interface ServiceAppointment {
   userId?: string;
   amount: number; // Float in API
   currency: string;
-  payload: Record<string, unknown>; // { status, scheduledAt, formValues, ... }
+  payload: Record<string, unknown>; // { fields, meta, ... }
   paidAt?: string | null;
   canceledAt?: string | null;
   approvedAt?: string | null;
   rejectedAt?: string | null;
+  completedAt?: string | null;
+  completedProofUrl?: string | null;
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -227,13 +229,14 @@ export interface SalesInvoice {
 }
 
 // ── Notification ──────────────────────────────────────────────
-// NOTE: type and read status are stored INSIDE payload JSON
+// payload shape: { event, subject, message, appointmentId?, serviceId?,
+//                  amount?, currency?, completedProofUrl? }
 
 export interface Notification {
   id: string;
   userId: string;
   provider: string;
-  payload: Record<string, unknown>; // { type, message, read, ... }
+  payload: Record<string, unknown>;
   deliveredAt?: string;
   deliveryAttemptCount: number;
   createdAt?: string;
