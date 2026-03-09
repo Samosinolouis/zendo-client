@@ -83,6 +83,7 @@ export interface Service {
   bannerImageUrl?: string | null;
   minPrice?: number | null;
   maxPrice?: number | null;
+  tags: string[];
   createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
