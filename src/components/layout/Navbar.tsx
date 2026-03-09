@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/sheet";
 
 export default function Navbar() {
-  const { user, isLoggedIn, isOwner, logout } = useAuth();
+  const { user, isLoggedIn, isOwner, isAdmin, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
@@ -51,6 +51,7 @@ export default function Navbar() {
     navLinks.push({ href: "/appointments", label: "Appointments", icon: CalendarDays });
     navLinks.push({ href: "/notifications", label: "Notifications", icon: Bell });
     if (isOwner) navLinks.push({ href: "/owner/dashboard", label: "Dashboard", icon: LayoutDashboard });
+    if (isAdmin) navLinks.push({ href: "/admin/dashboard", label: "Admin Dashboard", icon: LayoutDashboard });
   }
 
   const handleLogout = () => {
@@ -126,6 +127,11 @@ export default function Navbar() {
                   {isOwner && (
                     <DropdownMenuItem asChild className="cursor-pointer">
                       <Link href="/owner/dashboard"><LayoutDashboard className="size-4 mr-2" /> Owner Dashboard</Link>
+                    </DropdownMenuItem>
+                  )}
+                  {isAdmin && (
+                    <DropdownMenuItem asChild className="cursor-pointer">
+                      <Link href="/admin/dashboard"><LayoutDashboard className="size-4 mr-2" /> Admin Dashboard</Link>
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem asChild className="cursor-pointer">
