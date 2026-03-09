@@ -796,41 +796,52 @@ function FeedbackCard({
   }>(GET_USER, { id: feedback.userId });
   const reviewer = userData?.user ?? null;
 
+  const title = (payload as { title?: string } | null)?.title;
+  const body = (payload as { body?: string } | null)?.body;
+
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-center gap-3 mb-3">
-          <Avatar className="w-9 h-9">
-            <AvatarImage src={reviewer?.profilePictureUrl ?? undefined} />
-            <AvatarFallback>{getInitials(reviewer?.firstName, reviewer?.lastName)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">
-              {reviewer ? `${reviewer.firstName} ${reviewer.lastName}` : "Loading..."}
-            </p>
-            <p className="text-xs text-muted-foreground">{formatDate(feedback.createdAt ?? "")}</p>
+    <Card className="border-0 shadow-sm">
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={reviewer?.profilePictureUrl ?? undefined} />
+              <AvatarFallback className="text-sm">
+                {getInitials(reviewer?.firstName, reviewer?.lastName)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">
+                {reviewer ? `${reviewer.firstName} ${reviewer.lastName}` : "Anonymous"}
+              </p>
+              <p className="text-xs text-muted-foreground">{formatDate(feedback.createdAt ?? "")}</p>
+            </div>
           </div>
-          <div className="flex items-center gap-0.5">
-            {Array.from({ length: feedback.rating ?? 0 }, (_, i) => i + 1).map((n) => (
-              <Star key={n} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+          <div className="flex items-center gap-0.5 shrink-0">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={i}
+                className={`w-4 h-4 ${
+                  i < (feedback.rating ?? 0)
+                    ? "text-amber-400 fill-amber-400"
+                    : "text-muted-foreground/30"
+                }`}
+              />
             ))}
           </div>
         </div>
+
         {payload?.type === "doc" && Array.isArray(payload.content) ? (
-          <div className="mt-2 space-y-2">
+          <div className="space-y-2">
             {(payload.content as PageNode[]).map((node) => (
               <NodePreview key={node.id} node={node} />
             ))}
           </div>
         ) : (
-          <>
-            {(payload as { title?: string } | null)?.title && (
-              <h4 className="font-medium text-foreground text-sm">{(payload as { title?: string }).title}</h4>
-            )}
-            {(payload as { body?: string } | null)?.body && (
-              <p className="text-sm text-muted-foreground mt-1">{(payload as { body?: string }).body}</p>
-            )}
-          </>
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">{title ?? "Untitled"}</h4>
+            {body && <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{body}</p>}
+          </div>
         )}
       </CardContent>
     </Card>
