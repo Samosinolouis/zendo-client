@@ -438,14 +438,14 @@ export default function OwnerPayments() {
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-foreground">Payments</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Payments</h1>
+        <p className="text-muted-foreground mt-1">
           Read-only record of all payments received. Click a row to view and
           manage sales invoice requests.
         </p>
-      </header>
+      </div>
 
       {businesses.length > 1 && (
         <Select

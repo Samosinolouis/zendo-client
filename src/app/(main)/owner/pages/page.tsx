@@ -1353,13 +1353,13 @@ export default function OwnerPages() {
   if (selected) return <ServicePageEditor service={selected} onBack={() => setSelected(null)} />;
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-foreground">Pages</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Pages</h1>
+        <p className="text-muted-foreground mt-1">
           Build and publish rich content pages for each of your services.
         </p>
-      </header>
+      </div>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search services…"

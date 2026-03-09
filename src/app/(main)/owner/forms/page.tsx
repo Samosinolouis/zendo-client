@@ -1967,19 +1967,19 @@ export default function OwnerForms() {
 
   return (
 
-    <div className="space-y-6">
+    <div className="space-y-8">
 
-      <header>
+      <div>
 
-        <h1 className="text-2xl font-bold text-foreground">Forms</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Forms</h1>
 
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-muted-foreground mt-1">
 
           Configure the dynamic booking form and pricing for each of your services.
 
         </p>
 
-      </header>
+      </div>
 
 
 

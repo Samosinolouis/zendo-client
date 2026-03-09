@@ -519,13 +519,13 @@ export default function OwnerPayoutsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-foreground">Payouts</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Payouts</h1>
+        <p className="text-muted-foreground mt-1">
           Review your payout statements and BIR-compliant service billings.
         </p>
-      </header>
+      </div>
 
       {/* Summary cards â€” only when data is loaded */}
       {!loading && allPayouts.length > 0 && (
