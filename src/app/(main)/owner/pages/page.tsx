@@ -48,6 +48,7 @@ import {
   X as XIcon,
   AlertTriangle, CheckCircle2, AlertCircle,
   ExternalLink, Clock, Users, Star,
+  ZoomIn, ChevronLeft, ChevronRight, X as LightboxClose,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -620,6 +621,195 @@ const CTA_CLS: Record<string, string> = {
   gradient: "bg-gradient-to-br from-primary to-primary/70 rounded-2xl p-8 text-center text-primary-foreground",
 };
 
+// ── Lightbox carousel ──────────────────────────────────────────
+function GalleryLightbox({
+  images,
+  startIndex,
+  onClose,
+}: {
+  readonly images: { url: string; caption?: string }[];
+  readonly startIndex: number;
+  readonly onClose: () => void;
+}) {
+  const [index, setIndex] = useState(startIndex);
+  const prev = () => setIndex((i) => (i - 1 + images.length) % images.length);
+  const next = () => setIndex((i) => (i + 1) % images.length);
+
+  // Close on Escape, navigate with arrow keys
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") onClose();
+    if (e.key === "ArrowLeft") prev();
+    if (e.key === "ArrowRight") next();
+  };
+
+  const current = images[index];
+
+  return (
+    // biome-ignore lint: keyboard handler on overlay is intentional for lightbox dismiss
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={onClose}
+      onKeyDown={handleKey}
+      // biome-ignore lint: tabIndex required for key events
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+    >
+      {/* Stop propagation so clicking the image/controls doesn't close */}
+      {/* biome-ignore lint: intentional */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <div
+        className="relative flex flex-col items-center max-w-4xl w-full px-4"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {/* Close */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
+        >
+          <LightboxClose className="w-7 h-7" />
+        </button>
+
+        {/* Main image */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={current.url}
+          alt={current.caption || ""}
+          className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-2xl"
+        />
+
+        {/* Caption */}
+        {current.caption && (
+          <p className="mt-3 text-sm text-white/70 text-center">{current.caption}</p>
+        )}
+
+        {/* Counter */}
+        {images.length > 1 && (
+          <p className="mt-1.5 text-xs text-white/40">{index + 1} / {images.length}</p>
+        )}
+
+        {/* Prev / Next */}
+        {images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={prev}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={next}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </>
+        )}
+
+        {/* Dot indicators */}
+        {images.length > 1 && (
+          <div className="flex gap-1.5 mt-4">
+            {images.map((img, i) => (
+              <button
+                key={img.url}
+                type="button"
+                onClick={() => setIndex(i)}
+                className={cn(
+                  "w-2 h-2 rounded-full transition-colors",
+                  i === index ? "bg-white" : "bg-white/30 hover:bg-white/60",
+                )}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ImageNodePreview({ node }: { readonly node: ImageNode }) {
+  const [open, setOpen] = useState(false);
+  if (!node.attrs.url)
+    return (
+      <div className="w-full h-40 bg-muted rounded-xl flex items-center justify-center text-muted-foreground gap-2">
+        <ImageIcon className="w-5 h-5" /><span className="text-sm">No image uploaded</span>
+      </div>
+    );
+  return (
+    <>
+      <figure className={cn("space-y-2", IMAGE_SIZE_CLS[node.attrs.size] ?? "w-full")}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="relative group w-auto block rounded-xl overflow-hidden shadow-sm"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={node.attrs.url} alt={node.attrs.alt || ""} className="max-h-64 w-auto rounded-xl object-cover transition-transform group-hover:scale-105" />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+            <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+          </div>
+        </button>
+        {node.attrs.caption && <figcaption className="text-sm text-muted-foreground text-center">{node.attrs.caption}</figcaption>}
+      </figure>
+      {open && (
+        <GalleryLightbox
+          images={[{ url: node.attrs.url, caption: node.attrs.caption }]}
+          startIndex={0}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function GalleryNodePreview({ node }: { readonly node: GalleryNode }) {
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const items = node.attrs.items.filter((i) => i.url);
+  if (!items.length)
+    return (
+      <div className="w-full h-32 bg-muted rounded-xl flex items-center justify-center text-muted-foreground gap-2">
+        <LayoutGrid className="w-5 h-5" /><span className="text-sm">No gallery images</span>
+      </div>
+    );
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item, idx) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setLightboxIdx(idx)}
+            className="relative group overflow-hidden rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0"
+            style={{ width: 150, height: 150 }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={item.url} alt={item.caption || ""} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+              <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+            </div>
+            {item.caption && (
+              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1.5 translate-y-full group-hover:translate-y-0 transition-transform">
+                {item.caption}
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+      {lightboxIdx !== null && (
+        <GalleryLightbox
+          images={items.map((it) => ({ url: it.url, caption: it.caption }))}
+          startIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+    </>
+  );
+}
+
 export function NodePreview({ node }: { node: PageNode }) {
   switch (node.type) {
     case "heading": {
@@ -667,44 +857,9 @@ export function NodePreview({ node }: { node: PageNode }) {
       );
     }
     case "image":
-      if (!node.attrs.url)
-        return (
-          <div className="w-full h-40 bg-muted rounded-xl flex items-center justify-center text-muted-foreground gap-2">
-            <ImageIcon className="w-5 h-5" /><span className="text-sm">No image uploaded</span>
-          </div>
-        );
-      return (
-        <figure className={cn("space-y-2", IMAGE_SIZE_CLS[node.attrs.size] ?? "w-full")}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={node.attrs.url} alt={node.attrs.alt || ""} className="w-full rounded-xl object-cover shadow-sm" />
-          {node.attrs.caption && <figcaption className="text-sm text-muted-foreground text-center">{node.attrs.caption}</figcaption>}
-        </figure>
-      );
-    case "gallery": {
-      const items = node.attrs.items.filter((i) => i.url);
-      const gridCls = { 2: "grid-cols-2", 3: "grid-cols-2 sm:grid-cols-3", 4: "grid-cols-2 sm:grid-cols-4" }[node.attrs.columns] ?? "grid-cols-3";
-      if (!items.length)
-        return (
-          <div className="w-full h-32 bg-muted rounded-xl flex items-center justify-center text-muted-foreground gap-2">
-            <LayoutGrid className="w-5 h-5" /><span className="text-sm">No gallery images</span>
-          </div>
-        );
-      return (
-        <div className={cn("grid gap-2", gridCls)}>
-          {items.map((item) => (
-            <div key={item.id} className="relative group overflow-hidden rounded-lg">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={item.url} alt={item.caption || ""} className="w-full aspect-square object-cover transition-transform group-hover:scale-105" />
-              {item.caption && (
-                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1.5 translate-y-full group-hover:translate-y-0 transition-transform">
-                  {item.caption}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      );
-    }
+      return <ImageNodePreview node={node} />;
+    case "gallery":
+      return <GalleryNodePreview node={node} />;
     case "video": {
       const embedUrl = getEmbedUrl(node.attrs.url);
       if (!embedUrl)

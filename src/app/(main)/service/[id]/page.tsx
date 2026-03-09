@@ -11,7 +11,6 @@ import {
 import {
   CREATE_SERVICE_APPOINTMENT,
   CREATE_PAYMENT_LINK,
-  CREATE_SERVICE_FEEDBACK,
 } from "@/graphql/mutations";
 import type {
   Service, Business, ServiceFeedback, ServiceForm,
@@ -22,7 +21,7 @@ import {
   ArrowLeft, Star, CalendarDays, CheckCircle2,
   AlertCircle, BookOpen, MessageCircle, Loader2, Clock,
 } from "lucide-react";
-import { parsePagePayload } from "@/graphql/page-nodes";
+import { parsePagePayload, type PageNode } from "@/graphql/page-nodes";
 import { parseFormPayload, isOptionsField, isBooleanField } from "@/graphql/form";
 import type { FormField } from "@/graphql/form";
 import { NodePreview } from "@/app/(main)/owner/pages/page";
@@ -435,7 +434,7 @@ export default function ServiceDetailPage({
   );
   const availableSlots = availData?.serviceAvailabilities?.filter((s) => !s.isFull) ?? [];
 
-  const { data: fbData, refetch: refetchFeedbacks } = useQuery<{
+  const { data: fbData } = useQuery<{
     serviceFeedbacks: Connection<ServiceFeedback>;
   }>(GET_SERVICE_FEEDBACKS, { first: 100, filter: { serviceId: id } });
   const feedbacks = extractNodes(fbData?.serviceFeedbacks);
@@ -448,19 +447,11 @@ export default function ServiceDetailPage({
     createPaymentLink: { paymentLink: { id: string; redirectUrl: string | null } };
   }>(CREATE_PAYMENT_LINK, { throwOnError: true });
 
-  const { mutate: submitReview, loading: reviewLoading } = useMutation<{
-    createServiceFeedback: { serviceFeedback: { id: string } };
-  }>(CREATE_SERVICE_FEEDBACK, { onCompleted: refetchFeedbacks });
-
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [bookingStep, setBookingStep] = useState<BookingStep>("details");
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewTitle, setReviewTitle]   = useState("");
-  const [reviewBody, setReviewBody]     = useState("");
-  const [reviewDone, setReviewDone]     = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
 
   if (svcLoading) {
@@ -734,102 +725,21 @@ export default function ServiceDetailPage({
                   </Card>
                 ) : (
                   feedbacks.map((fb) => {
-                    const payload = fb.payload as { title?: string; body?: string } | null;
+                    const payload = fb.payload as Record<string, unknown> | null;
                     return <FeedbackCard key={fb.id} feedback={fb} payload={payload} />;
                   })
                 )}
 
-                {isLoggedIn && !reviewDone && (
-                  <Card>
-                    <CardContent className="p-6 space-y-4">
-                      <h3 className="text-base font-semibold text-foreground">Write a Review</h3>
-                      <div className="flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() => setReviewRating(n)}
-                            className="focus:outline-none"
-                          >
-                            <Star
-                              className={`w-7 h-7 transition-colors ${
-                                n <= reviewRating
-                                  ? "fill-amber-400 text-amber-400"
-                                  : "text-muted-foreground/40 hover:text-amber-300"
-                              }`}
-                            />
-                          </button>
-                        ))}
-                        {reviewRating > 0 && (
-                          <span className="text-sm text-muted-foreground ml-2">
-                            {["Terrible", "Poor", "Average", "Good", "Excellent"][reviewRating - 1]}
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Title</Label>
-                        <Input
-                          placeholder="Summarise your experience"
-                          value={reviewTitle}
-                          onChange={(e) => setReviewTitle(e.target.value)}
-                          maxLength={120}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Review</Label>
-                        <Textarea
-                          placeholder="Tell others what you thought of this service..."
-                          value={reviewBody}
-                          onChange={(e) => setReviewBody(e.target.value)}
-                          rows={4}
-                          maxLength={1000}
-                        />
-                      </div>
-                      <Button
-                        onClick={async () => {
-                          if (reviewRating === 0) return;
-                          const ok = await submitReview({
-                            input: {
-                              serviceId: id,
-                              rating: reviewRating,
-                              payload: { title: reviewTitle.trim(), body: reviewBody.trim() },
-                            },
-                          });
-                          if (ok) {
-                            setReviewDone(true);
-                            setReviewRating(0);
-                            setReviewTitle("");
-                            setReviewBody("");
-                          }
-                        }}
-                        disabled={reviewRating === 0 || reviewLoading}
-                        className="w-full"
-                      >
-                        {reviewLoading && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                        Submit Review
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-                {isLoggedIn && reviewDone && (
-                  <Card>
-                    <CardContent className="p-6 text-center space-y-2">
-                      <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto" />
-                      <p className="font-semibold text-foreground">Review submitted!</p>
-                      <p className="text-sm text-muted-foreground">Thank you for your feedback.</p>
-                    </CardContent>
-                  </Card>
-                )}
-                {!isLoggedIn && (
-                  <Card>
-                    <CardContent className="p-6 text-center">
-                      <p className="text-sm text-muted-foreground mb-3">Sign in to leave a review</p>
-                      <Button variant="outline" size="sm" onClick={() => signIn("keycloak")}>
-                        Sign in
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
+                <Card>
+                  <CardContent className="p-6 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Reviews can only be submitted from a completed appointment.{" "}
+                      <Link href="/appointments" className="text-primary underline underline-offset-2">
+                        Go to My Appointments
+                      </Link>
+                    </p>
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </div>
@@ -874,7 +784,7 @@ function FeedbackCard({
   payload,
 }: {
   readonly feedback: ServiceFeedback;
-  readonly payload: { readonly title?: string; readonly body?: string } | null;
+  readonly payload: Record<string, unknown> | null;
 }) {
   const { data: userData } = useQuery<{
     user: {
@@ -906,8 +816,22 @@ function FeedbackCard({
             ))}
           </div>
         </div>
-        {payload?.title && <h4 className="font-medium text-foreground text-sm">{payload.title}</h4>}
-        {payload?.body && <p className="text-sm text-muted-foreground mt-1">{payload.body}</p>}
+        {payload?.type === "doc" && Array.isArray(payload.content) ? (
+          <div className="mt-2 space-y-2">
+            {(payload.content as PageNode[]).map((node) => (
+              <NodePreview key={node.id} node={node} />
+            ))}
+          </div>
+        ) : (
+          <>
+            {(payload as { title?: string } | null)?.title && (
+              <h4 className="font-medium text-foreground text-sm">{(payload as { title?: string }).title}</h4>
+            )}
+            {(payload as { body?: string } | null)?.body && (
+              <p className="text-sm text-muted-foreground mt-1">{(payload as { body?: string }).body}</p>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   );

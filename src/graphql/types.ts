@@ -93,8 +93,6 @@ export type Business = Node & {
   __typename?: 'Business';
   /** URL to the business banner image */
   bannerImageUrl?: Maybe<Scalars['String']['output']>;
-  /** Feedbacks for this business */
-  businessFeedbacks?: Maybe<BusinessFeedbackConnection>;
   /** When the record was created */
   createdAt: Scalars['DateTime']['output'];
   /** ID of the user who created this record */
@@ -119,13 +117,6 @@ export type Business = Node & {
   user?: Maybe<User>;
   /** Owning user ID */
   userId: Scalars['ID']['output'];
-};
-
-
-/** A business entity owned by a user. */
-export type BusinessBusinessFeedbacksArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  first: Scalars['Int']['input'];
 };
 
 
@@ -160,59 +151,6 @@ export type BusinessEdge = {
   cursor: Scalars['String']['output'];
   node: Business;
 };
-
-/** A customer's feedback/review for a business. */
-export type BusinessFeedback = Node & {
-  __typename?: 'BusinessFeedback';
-  /** The business being reviewed */
-  business?: Maybe<Business>;
-  /** ID of the business being reviewed */
-  businessId: Scalars['ID']['output'];
-  /** When the record was created */
-  createdAt: Scalars['DateTime']['output'];
-  /** ID of the user who created this record */
-  createdBy: Scalars['ID']['output'];
-  /** Globally unique identifier */
-  id: Scalars['ID']['output'];
-  /** Feedback content payload (JSON, ProseMirror) */
-  payload: Scalars['JSON']['output'];
-  /** Rating (1-5) */
-  rating: Scalars['Int']['output'];
-  /** When the record was last updated */
-  updatedAt: Scalars['DateTime']['output'];
-  /** The user who submitted the feedback */
-  user?: Maybe<User>;
-  /** ID of the user who submitted the feedback */
-  userId: Scalars['ID']['output'];
-};
-
-export type BusinessFeedbackConnection = {
-  __typename?: 'BusinessFeedbackConnection';
-  edges: Array<BusinessFeedbackEdge>;
-  pageInfo: PageInfo;
-};
-
-export type BusinessFeedbackEdge = {
-  __typename?: 'BusinessFeedbackEdge';
-  cursor: Scalars['String']['output'];
-  node: BusinessFeedback;
-};
-
-export type BusinessFeedbackFilter = {
-  businessId?: InputMaybe<Scalars['ID']['input']>;
-  userId?: InputMaybe<Scalars['ID']['input']>;
-};
-
-export type BusinessFeedbackSort = {
-  field: BusinessFeedbackSortField;
-};
-
-export enum BusinessFeedbackSortField {
-  CreatedAt = 'CREATED_AT',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  Rating = 'RATING',
-  RatingDesc = 'RATING_DESC'
-}
 
 export type BusinessFilter = {
   name?: InputMaybe<Scalars['String']['input']>;
@@ -294,17 +232,6 @@ export type CompleteServiceAppointmentPayload = {
   serviceAppointment: ServiceAppointment;
 };
 
-export type CreateBusinessFeedbackInput = {
-  businessId: Scalars['ID']['input'];
-  payload: Scalars['JSON']['input'];
-  rating: Scalars['Int']['input'];
-};
-
-export type CreateBusinessFeedbackPayload = {
-  __typename?: 'CreateBusinessFeedbackPayload';
-  businessFeedback: BusinessFeedback;
-};
-
 export type CreateBusinessInput = {
   bannerImageUrl?: InputMaybe<Scalars['String']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
@@ -371,6 +298,7 @@ export type CreateServiceBillingPayload = {
 };
 
 export type CreateServiceFeedbackInput = {
+  appointmentId: Scalars['ID']['input'];
   payload: Scalars['JSON']['input'];
   rating: Scalars['Int']['input'];
   serviceId: Scalars['ID']['input'];
@@ -505,8 +433,6 @@ export type Mutation = {
   completeServiceAppointmentByBusiness: CompleteServiceAppointmentByBusinessPayload;
   /** Create a new business (requires authentication) */
   createBusiness: CreateBusinessPayload;
-  /** Submit a feedback/review for a business (requires authentication) */
-  createBusinessFeedback: CreateBusinessFeedbackPayload;
   /** Create a payment link for an appointment (requires authentication) */
   createPaymentLink: CreatePaymentLinkPayload;
   /** Create a payout statement (admin only) */
@@ -606,11 +532,6 @@ export type MutationCompleteServiceAppointmentByBusinessArgs = {
 
 export type MutationCreateBusinessArgs = {
   input: CreateBusinessInput;
-};
-
-
-export type MutationCreateBusinessFeedbackArgs = {
-  input: CreateBusinessFeedbackInput;
 };
 
 
@@ -1089,10 +1010,6 @@ export type Query = {
   billingAddresses: BillingAddressConnection;
   /** Fetch a single business by ID */
   business?: Maybe<Business>;
-  /** Fetch a single business feedback by ID */
-  businessFeedback?: Maybe<BusinessFeedback>;
-  /** List business feedbacks with relay-style cursor pagination */
-  businessFeedbacks: BusinessFeedbackConnection;
   /** Fetch a business metric by ID */
   businessMetric?: Maybe<BusinessMetric>;
   /** Fetch a business metric by business ID */
@@ -1188,19 +1105,6 @@ export type QueryBillingAddressesArgs = {
 
 export type QueryBusinessArgs = {
   id: Scalars['ID']['input'];
-};
-
-
-export type QueryBusinessFeedbackArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QueryBusinessFeedbacksArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  filter?: InputMaybe<BusinessFeedbackFilter>;
-  first: Scalars['Int']['input'];
-  sort?: InputMaybe<BusinessFeedbackSort>;
 };
 
 
@@ -2177,8 +2081,6 @@ export type User = Node & {
   bannerImageUrl?: Maybe<Scalars['String']['output']>;
   /** User's billing address */
   billingAddress?: Maybe<BillingAddress>;
-  /** Business feedbacks by this user */
-  businessFeedbacks?: Maybe<BusinessFeedbackConnection>;
   /** Businesses owned by this user */
   businesses?: Maybe<BusinessConnection>;
   /** When the record was created */
@@ -2209,16 +2111,6 @@ export type User = Node & {
   suffix?: Maybe<Scalars['String']['output']>;
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
-};
-
-
-/**
- * User profile information.
- * This is the application-level user record — NOT the Keycloak identity.
- */
-export type UserBusinessFeedbacksArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  first: Scalars['Int']['input'];
 };
 
 

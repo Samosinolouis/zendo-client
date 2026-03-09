@@ -1,16 +1,18 @@
 ﻿"use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_SERVICE_APPOINTMENTS, GET_SERVICES, GET_BUSINESSES } from "@/graphql/queries";
-import { COMPLETE_SERVICE_APPOINTMENT } from "@/graphql/mutations";
+import { COMPLETE_SERVICE_APPOINTMENT, CREATE_SERVICE_FEEDBACK } from "@/graphql/mutations";
 import type { ServiceAppointment, Service, Business, Connection } from "@/types";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import {
   CalendarDays, ArrowRight, Clock, CheckCircle2, XCircle,
   Hourglass, Sparkles, CalendarCheck, CheckCheck, MoreHorizontal, Eye,
+  Star, Loader2, Plus, X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,6 +33,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import type { ParagraphNode, GalleryNode } from "@/graphql/page-nodes";
+import { uid } from "@/graphql/page-nodes";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 // â”€â”€ Status helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type AptStatus = "paid" | "approved" | "rejected" | "cancelled" | "pending" | "completed" | "for_completion";
@@ -108,6 +115,111 @@ function fmtFieldValue(value: unknown): string {
 }
 
 // â”€â”€ Per-card action cell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Review editor state updaters (pure — outside component to limit nesting depth) ──
+type ReviewDocNode = ParagraphNode | GalleryNode;
+
+function applyParagraphText(nodes: ReviewDocNode[], id: string, text: string): ReviewDocNode[] {
+  return nodes.map((n) => (n.id === id ? { id, type: "paragraph" as const, attrs: { text } } : n));
+}
+
+function applyGalleryItemUrl(nodes: ReviewDocNode[], nodeId: string, itemId: string, url: string): ReviewDocNode[] {
+  return nodes.map((n) => {
+    if (n.id !== nodeId) return n;
+    const g = n as GalleryNode;
+    const items = g.attrs.items.map((it) => (it.id === itemId ? { ...it, url } : it));
+    return { ...g, attrs: { ...g.attrs, items } };
+  });
+}
+
+function applyRemoveGalleryItem(nodes: ReviewDocNode[], nodeId: string, itemId: string): ReviewDocNode[] {
+  return nodes.map((n) => {
+    if (n.id !== nodeId) return n;
+    const g = n as GalleryNode;
+    return { ...g, attrs: { ...g.attrs, items: g.attrs.items.filter((it) => it.id !== itemId) } };
+  });
+}
+
+function applyAddGalleryItem(nodes: ReviewDocNode[], nodeId: string): ReviewDocNode[] {
+  return nodes.map((n) => {
+    if (n.id !== nodeId) return n;
+    const g = n as GalleryNode;
+    return { ...g, attrs: { ...g.attrs, items: [...g.attrs.items, { id: uid(), url: "", caption: "" }] } };
+  });
+}
+
+function ReviewNodeEditor({
+  nodes,
+  onChange,
+}: {
+  readonly nodes: ReviewDocNode[];
+  readonly onChange: (updated: ReviewDocNode[]) => void;
+}) {
+  return (
+    <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
+      {nodes.map((node) => (
+        <div key={node.id} className="border border-border rounded-lg p-2.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+              {node.type === "paragraph" ? "Paragraph" : "Gallery"}
+            </span>
+            <button
+              type="button"
+              onClick={() => onChange(nodes.filter((n) => n.id !== node.id))}
+              disabled={nodes.length <= 1}
+              className="text-muted-foreground hover:text-destructive disabled:opacity-30 transition-colors"
+            >
+              <XIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {node.type === "paragraph" && (
+            <Textarea
+              placeholder="Write your paragraph..."
+              value={node.attrs.text}
+              onChange={(e) => onChange(applyParagraphText(nodes, node.id, e.target.value))}
+              onKeyDown={(e) => e.stopPropagation()}
+              rows={3}
+              className="resize-none text-xs"
+            />
+          )}
+          {node.type === "gallery" && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-1.5">
+                {node.attrs.items.map((item) => (
+                  <div key={item.id} className="relative">
+                    <ImageUpload
+                      value={item.url || undefined}
+                      onChange={(url) => onChange(applyGalleryItemUrl(nodes, node.id, item.id, url))}
+                      aspect="square"
+                      folder="reviews/gallery"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onChange(applyRemoveGalleryItem(nodes, node.id, item.id))}
+                      disabled={node.attrs.items.length <= 1}
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/50 flex items-center justify-center text-white disabled:opacity-30"
+                    >
+                      <XIcon className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onChange(applyAddGalleryItem(nodes, node.id))}
+                className="w-full gap-1 border-dashed h-6 text-xs"
+              >
+                <Plus className="w-3 h-3" /> Add Image
+              </Button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AppointmentActions({
   apt,
   service,
@@ -127,6 +239,17 @@ function AppointmentActions({
   }>(COMPLETE_SERVICE_APPOINTMENT, { onCompleted });
 
   const canComplete = status === "approved" || status === "for_completion";
+
+  // Review state
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewDone, setReviewDone]     = useState(false);
+  const [reviewNodes, setReviewNodes]   = useState<(ParagraphNode | GalleryNode)[]>(
+    () => [{ id: uid(), type: "paragraph", attrs: { text: "" } }]
+  );
+
+  const { mutate: submitReview, loading: reviewLoading } = useMutation<{
+    createServiceFeedback: { serviceFeedback: { id: string } };
+  }>(CREATE_SERVICE_FEEDBACK);
 
   return (
     <DropdownMenu>
@@ -307,7 +430,7 @@ function AppointmentActions({
                       <Button className="w-full" disabled={loading} onClick={() => complete({ id: apt.id })}>
                         {loading ? (
                           <span className="flex items-center gap-2">
-                            <CheckCheck className="w-4 h-4 animate-pulse" /> Processingâ€¦
+                            <CheckCheck className="w-4 h-4 animate-pulse" /> Processing…
                           </span>
                         ) : (
                           <span className="flex items-center gap-2">
@@ -316,6 +439,131 @@ function AppointmentActions({
                         )}
                       </Button>
                     </div>
+                  </DialogContent>
+                </Dialog>
+              </DropdownMenuItem>
+            </>
+          )}
+
+          {status === "completed" && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => e.preventDefault()}
+                className="p-0"
+              >
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-amber-600 focus:text-amber-600">
+                      <Star className="w-3.5 h-3.5" />
+                      {reviewDone ? "Review Submitted" : "Write a Review"}
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Write a Review</DialogTitle>
+                    </DialogHeader>
+                    {reviewDone ? (
+                      <div className="text-center space-y-3 py-4">
+                        <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto" />
+                        <p className="font-semibold text-foreground">Review submitted!</p>
+                        <p className="text-sm text-muted-foreground">Thank you for your feedback.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4 text-sm">
+                        {service && (
+                          <p className="text-muted-foreground text-xs">
+                            Reviewing: <span className="font-medium text-foreground">{service.name}</span>
+                          </p>
+                        )}
+                        <div className="space-y-1.5">
+                          <Label>Rating</Label>
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setReviewRating(n)}
+                                className="focus:outline-none"
+                              >
+                                <Star
+                                  className={`w-7 h-7 transition-colors ${
+                                    n <= reviewRating
+                                      ? "fill-amber-400 text-amber-400"
+                                      : "text-muted-foreground/40 hover:text-amber-300"
+                                  }`}
+                                />
+                              </button>
+                            ))}
+                            {reviewRating > 0 && (
+                              <span className="text-xs text-muted-foreground ml-1">
+                                {["Terrible", "Poor", "Average", "Good", "Excellent"][reviewRating - 1]}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Content</Label>
+                          <ReviewNodeEditor nodes={reviewNodes} onChange={setReviewNodes} />
+                          <div className="flex gap-2 pt-0.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setReviewNodes((prev) => [
+                                  ...prev,
+                                  { id: uid(), type: "paragraph" as const, attrs: { text: "" } },
+                                ])
+                              }
+                              className="flex-1 gap-1 text-xs h-7"
+                            >
+                              <Plus className="w-3 h-3" /> Paragraph
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setReviewNodes((prev) => [
+                                  ...prev,
+                                  {
+                                    id: uid(),
+                                    type: "gallery" as const,
+                                    attrs: { items: [{ id: uid(), url: "", caption: "" }], columns: 3 },
+                                  },
+                                ])
+                              }
+                              className="flex-1 gap-1 text-xs h-7"
+                            >
+                              <Plus className="w-3 h-3" /> Gallery
+                            </Button>
+                          </div>
+                        </div>
+                        <Separator />
+                        <Button
+                          className="w-full"
+                          disabled={reviewRating === 0 || reviewLoading}
+                          onClick={async () => {
+                            const ok = await submitReview({
+                              input: {
+                                appointmentId: apt.id,
+                                serviceId: apt.serviceId,
+                                rating: reviewRating,
+                                payload: { type: "doc", content: reviewNodes },
+                              },
+                            });
+                            if (ok) setReviewDone(true);
+                          }}
+                        >
+                          {reviewLoading ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" /> Submitting…
+                            </span>
+                          ) : "Submit Review"}
+                        </Button>
+                      </div>
+                    )}
                   </DialogContent>
                 </Dialog>
               </DropdownMenuItem>
@@ -599,8 +847,16 @@ export default function AppointmentsPage() {
                             <p className="font-medium text-sm text-muted-foreground truncate">{service?.name ?? "Unknown Service"}</p>
                             <p className="text-xs text-muted-foreground truncate">{business?.name ?? "â€”"}</p>
                           </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-sm font-bold text-muted-foreground">{formatCurrency(apt.amount, apt.currency)}</p>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-muted-foreground">{formatCurrency(apt.amount, apt.currency)}</p>
+                            </div>
+                            <AppointmentActions
+                              apt={apt}
+                              service={service}
+                              business={business ?? undefined}
+                              onCompleted={refetch}
+                            />
                           </div>
                         </div>
                       </div>
