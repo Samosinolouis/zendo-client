@@ -461,6 +461,7 @@ export default function ServiceDetailPage({
   const [reviewTitle, setReviewTitle]   = useState("");
   const [reviewBody, setReviewBody]     = useState("");
   const [reviewDone, setReviewDone]     = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   if (svcLoading) {
     return (
@@ -608,6 +609,22 @@ export default function ServiceDetailPage({
               )}
             </p>
           )}
+          {service.description && (
+            <p className="mt-1 text-sm text-white/80 max-w-xl">
+              {descExpanded || service.description.length <= 120
+                ? service.description
+                : `${service.description.slice(0, 120)}...`}
+              {service.description.length > 120 && (
+                <button
+                  type="button"
+                  onClick={() => setDescExpanded((v) => !v)}
+                  className="ml-1 text-white/60 hover:text-white underline underline-offset-2 text-xs"
+                >
+                  {descExpanded ? "see less" : "see more"}
+                </button>
+              )}
+            </p>
+          )}
           {avgRating !== null && (
             <div className="flex items-center gap-2 mt-2">
               <div className="flex items-center gap-0.5">
@@ -645,12 +662,6 @@ export default function ServiceDetailPage({
               </TabsList>
 
               <TabsContent value="about" className="space-y-6">
-                <Card>
-                  <CardContent className="p-6">
-                    <p className="text-muted-foreground leading-relaxed">{service.description}</p>
-                  </CardContent>
-                </Card>
-
                 {(blogTitle || blogSubtitle || blogBanner || blogTags.length > 0) && (
                   <Card>
                     <CardContent className="p-6 space-y-3">
