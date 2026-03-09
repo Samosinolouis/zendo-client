@@ -1811,7 +1811,7 @@ export type UpdateBusinessPayload = {
 };
 
 export type UpdateEmailInput = {
-  newEmail: Scalars['String']['input'];
+  email: Scalars['String']['input'];
 };
 
 export type UpdateEmailPayload = {
