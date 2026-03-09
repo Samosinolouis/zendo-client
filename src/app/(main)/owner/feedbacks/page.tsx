@@ -4,8 +4,10 @@ import { useMemo } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQuery, extractNodes } from "@/graphql/hooks";
 import { GET_SERVICES, GET_SERVICE_FEEDBACKS, GET_USER } from "@/graphql/queries";
+import type { PageNode } from "@/graphql/page-nodes";
 import type { Service, ServiceFeedback, User, Connection } from "@/types";
 import { formatDate, getInitials } from "@/lib/utils";
+import { NodePreview } from "@/app/(main)/owner/pages/page";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -115,8 +117,9 @@ export default function OwnerFeedbacksPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {allFeedbacks.map((fb) => {
             const svc = svcMap[fb.serviceId];
-            const title = (fb.payload as Record<string, unknown>)?.title as string | undefined;
-            const body = (fb.payload as Record<string, unknown>)?.body as string | undefined;
+            const payload = fb.payload as Record<string, unknown> | null;
+            const title = (payload as { title?: string } | null)?.title;
+            const body = (payload as { body?: string } | null)?.body;
 
             return (
               <Card key={fb.id} className="border-0 shadow-sm">
@@ -146,10 +149,18 @@ export default function OwnerFeedbacksPage() {
                   )}
 
                   {/* Content */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground">{title ?? "Untitled"}</h4>
-                    {body && <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{body}</p>}
-                  </div>
+                  {payload?.type === "doc" && Array.isArray(payload.content) ? (
+                    <div className="space-y-2">
+                      {(payload.content as PageNode[]).map((node) => (
+                        <NodePreview key={node.id} node={node} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground">{title ?? "Untitled"}</h4>
+                      {body && <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{body}</p>}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
