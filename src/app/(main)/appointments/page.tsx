@@ -113,11 +113,11 @@ function parsePayload(raw: Record<string, unknown>): AppointmentPayload {
   };
 }
 function fmtFieldValue(value: unknown): string {
-  if (value === null || value === undefined) return "â€”";
+  if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "string") return value || "â€”";
+  if (typeof value === "string") return value || "—";
   if (typeof value === "number") return String(value);
-  return "â€”";
+  return "—";
 }
 
 // â”€â”€ Per-card action cell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -846,10 +846,10 @@ export default function AppointmentsPage() {
                           {/* Date badge */}
                           <div className="w-12 h-12 bg-muted rounded-xl flex flex-col items-center justify-center shrink-0">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase leading-none">
-                              {scheduled ? new Date(scheduled).toLocaleString("default", { month: "short" }) : "â€”"}
+                              {scheduled ? new Date(scheduled).toLocaleString("default", { month: "short" }) : "—"}
                             </span>
                             <span className="text-xl font-extrabold text-foreground leading-none">
-                              {scheduled ? new Date(scheduled).getDate() : "â€”"}
+                              {scheduled ? new Date(scheduled).getDate() : "—"}
                             </span>
                           </div>
 
@@ -873,7 +873,7 @@ export default function AppointmentsPage() {
                             <p className="font-semibold text-foreground text-sm truncate">
                               {service?.name ?? "Unknown Service"}
                             </p>
-                            <p className="text-xs text-muted-foreground truncate">{business?.name ?? "â€”"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{business?.name ?? "—"}</p>
                             {scheduled && (
                               <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                                 <Clock className="w-3 h-3" /> {formatDateTime(scheduled)}
@@ -931,10 +931,10 @@ export default function AppointmentsPage() {
                         <div className="flex flex-1 items-center gap-4 p-3.5 min-w-0">
                           <div className="w-11 h-11 bg-muted rounded-lg flex flex-col items-center justify-center shrink-0">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase leading-none">
-                              {scheduled ? new Date(scheduled).toLocaleString("default", { month: "short" }) : "â€”"}
+                              {scheduled ? new Date(scheduled).toLocaleString("default", { month: "short" }) : "—"}
                             </span>
                             <span className="text-lg font-extrabold text-muted-foreground leading-none">
-                              {scheduled ? new Date(scheduled).getDate() : "â€”"}
+                              {scheduled ? new Date(scheduled).getDate() : "—"}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
@@ -942,7 +942,7 @@ export default function AppointmentsPage() {
                               {STATUS_LABEL[status]}
                             </Badge>
                             <p className="font-medium text-sm text-muted-foreground truncate">{service?.name ?? "Unknown Service"}</p>
-                            <p className="text-xs text-muted-foreground truncate">{business?.name ?? "â€”"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{business?.name ?? "—"}</p>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
                             <div className="text-right">

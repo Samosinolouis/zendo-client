@@ -1,7 +1,7 @@
 ﻿"use client";
 
 // ================================================================
-// Owner Payouts â€” /owner/payouts
+// Owner Payouts — /owner/payouts
 //
 // Shows payout statements for all of the owner's businesses.
 // Expanding a statement reveals its service billings.
@@ -63,7 +63,7 @@ function InvoicePDF({ data }: { readonly data: InvoiceData }) {
   }, []);
 
   const fmtDate = (d?: string | null) =>
-    d ? new Date(d).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" }) : "â€”";
+    d ? new Date(d).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" }) : "—";
 
   const fmtMoney = (n: number) =>
     new Intl.NumberFormat("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -94,7 +94,7 @@ function InvoicePDF({ data }: { readonly data: InvoiceData }) {
           <p className="text-xs text-gray-600 mt-0.5">{data.sellerAddress}</p>
           <p className="text-xs text-gray-600">
             TIN: {data.sellerTIN}
-            {data.sellerBranchCode && ` â€” Branch Code: ${data.sellerBranchCode}`}
+            {data.sellerBranchCode && ` Branch Code: ${data.sellerBranchCode}`}
           </p>
         </div>
 
@@ -159,7 +159,7 @@ function InvoicePDF({ data }: { readonly data: InvoiceData }) {
           <div className="border border-gray-300 rounded p-2 mb-4 text-xs bg-gray-50">
             <span className="font-semibold">Special Buyer: </span>
             {specialBuyerLabel(data.specialBuyer.type)}
-            {data.specialBuyer.name && ` â€” ${data.specialBuyer.name}`}
+            {data.specialBuyer.name && ` — ${data.specialBuyer.name}`}
             {` (ID No. ${data.specialBuyer.idNumber})`}
           </div>
         )}
@@ -287,7 +287,7 @@ function BillingSheet({
             className="text-xs text-muted-foreground hover:text-foreground px-0"
             onClick={() => setActiveBillingId(null)}
           >
-            â† All Billings
+            All Billings
           </Button>
           <InvoicePDF data={activeBilling.payload} />
         </div>
@@ -309,9 +309,9 @@ function BillingSheet({
                   {b.payload.invoiceNumber ?? "Invoice"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {b.payload.invoiceDate ? formatDate(b.payload.invoiceDate) : "â€”"}
-                  {" Â· "}
-                  {b.payload.buyerName ?? "â€”"}
+                  {b.payload.invoiceDate ? formatDate(b.payload.invoiceDate) : "—"}
+                  {" • "}
+                  {b.payload.buyerName ?? "—"}
                 </p>
               </div>
               <div className="text-right shrink-0">
@@ -329,8 +329,8 @@ function BillingSheet({
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) { setActiveBillingId(null); onClose(); } }}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto print:fixed print:inset-0 print:w-full print:max-w-none print:overflow-visible">
-        <SheetHeader className="mb-4 print:hidden">
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto print:fixed print:inset-0 print:w-full print:max-w-none print:overflow-visible p-4">
+        <SheetHeader className="mb-4 print:hidden p-0">
           <SheetTitle className="flex items-center gap-2">
             <FileText className="w-4 h-4" />
             Service Billings
@@ -378,7 +378,7 @@ function PayoutCard({
               </p>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
                 <Calendar className="w-3 h-3" />
-                {formatDate(payout.periodStart)} â€” {formatDate(payout.periodEnd)}
+                {formatDate(payout.periodStart)} — {formatDate(payout.periodEnd)}
               </div>
             </div>
           </div>
@@ -409,11 +409,11 @@ function PayoutCard({
               </div>
               <div className="bg-background rounded-lg p-3 border border-border">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Fees</p>
-                <p className="text-sm font-bold text-red-600 mt-0.5">âˆ’ {formatCurrency(payout.totalFees)}</p>
+                <p className="text-sm font-bold text-red-600 mt-0.5">- {formatCurrency(payout.totalFees)}</p>
               </div>
               <div className="bg-background rounded-lg p-3 border border-border">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Tax</p>
-                <p className="text-sm font-bold text-orange-600 mt-0.5">âˆ’ {formatCurrency(payout.withholdingTax)}</p>
+                <p className="text-sm font-bold text-orange-600 mt-0.5">- {formatCurrency(payout.withholdingTax)}</p>
               </div>
               <div className="rounded-lg p-3 border border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-800">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Net</p>
@@ -563,7 +563,7 @@ export default function OwnerPayoutsPage() {
         </p>
       </div>
 
-      {/* Summary cards â€” only when data is loaded */}
+      {/* Summary cards — only when data is loaded */}
       {!loading && allPayouts.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {(
