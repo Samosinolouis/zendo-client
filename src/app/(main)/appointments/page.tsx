@@ -4,9 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
+import { useToast } from "@/providers/ToastProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_SERVICE_APPOINTMENTS, GET_SERVICES, GET_BUSINESSES } from "@/graphql/queries";
-import { COMPLETE_SERVICE_APPOINTMENT, CREATE_SERVICE_FEEDBACK } from "@/graphql/mutations";
+import {
+  COMPLETE_SERVICE_APPOINTMENT,
+  CREATE_PAYMENT_LINK,
+  CREATE_SERVICE_FEEDBACK,
+  CANCEL_SERVICE_APPOINTMENT,
+} from "@/graphql/mutations";
 import type { ServiceAppointment, Service, Business, Connection } from "@/types";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import {
@@ -233,12 +239,23 @@ function AppointmentActions({
 }) {
   const status = aptStatus(apt);
   const payload = parsePayload(apt.payload);
+  const { showError, showSuccess } = useToast();
 
   const { mutate: complete, loading } = useMutation<{
     completeServiceAppointment: { serviceAppointment: { id: string; completedAt: string } };
   }>(COMPLETE_SERVICE_APPOINTMENT, { onCompleted });
 
+  const { mutate: createPaymentLink, loading: paymentLoading } = useMutation<{
+    createPaymentLink: { paymentLink: { id: string; redirectUrl: string | null } };
+  }>(CREATE_PAYMENT_LINK, { throwOnError: true });
+
+  const { mutate: cancelAppointment, loading: cancelLoading } = useMutation<{
+    cancelServiceAppointment: { serviceAppointment: { id: string; canceledAt: string } };
+  }>(CANCEL_SERVICE_APPOINTMENT, { onCompleted, throwOnError: true });
+
   const canComplete = status === "approved" || status === "for_completion";
+  const canPayAgain = !apt.paidAt && !apt.canceledAt && !apt.rejectedAt && !apt.completedAt;
+  const canCancel = !apt.paidAt && !apt.canceledAt && !apt.completedAt;
 
   // Review state
   const [reviewRating, setReviewRating] = useState(0);
@@ -386,6 +403,84 @@ function AppointmentActions({
               View Service
             </Link>
           </DropdownMenuItem>
+
+          {canPayAgain && (
+            <DropdownMenuItem
+              onSelect={(e) => e.preventDefault()}
+              disabled={paymentLoading}
+              onClick={async () => {
+                try {
+                  const payResult = await createPaymentLink({
+                    input: { serviceAppointmentsId: apt.id },
+                  });
+                  const link = payResult?.createPaymentLink?.paymentLink;
+                  if (!link?.redirectUrl) {
+                    throw new Error("Payment provider did not return a redirect URL.");
+                  }
+                  globalThis.location.href = link.redirectUrl;
+                } catch (err) {
+                  showError(err instanceof Error ? err.message : "Failed to create payment link.");
+                }
+              }}
+              className="flex items-center gap-2"
+            >
+              {paymentLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+              Pay Again
+            </DropdownMenuItem>
+          )}
+
+          {canCancel && (
+            <DropdownMenuItem
+              onSelect={(e) => e.preventDefault()}
+              className="p-0"
+            >
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-red-600 focus:text-red-600">
+                    <XCircle className="w-3.5 h-3.5" />
+                    Cancel Appointment
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Cancel Appointment</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 text-sm">
+                    <p className="text-muted-foreground">
+                      This appointment has not been paid yet. Do you want to cancel it?
+                    </p>
+                    <Separator />
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      disabled={cancelLoading}
+                      onClick={async () => {
+                        try {
+                          const result = await cancelAppointment({ id: apt.id });
+                          if (!result?.cancelServiceAppointment?.serviceAppointment?.id) {
+                            throw new Error("Failed to cancel appointment.");
+                          }
+                          showSuccess("Appointment cancelled.");
+                        } catch (err) {
+                          showError(err instanceof Error ? err.message : "Failed to cancel appointment.");
+                        }
+                      }}
+                    >
+                      {cancelLoading ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Cancelling...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <XCircle className="w-4 h-4" /> Confirm Cancel
+                        </span>
+                      )}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </DropdownMenuItem>
+          )}
 
           {canComplete && (
             <>
