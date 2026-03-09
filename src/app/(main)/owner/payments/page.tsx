@@ -309,8 +309,8 @@ function InvoicesSheet({
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader className="mb-4">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-4">
+        <SheetHeader className="mb-4 p-0">
           <SheetTitle className="flex items-center gap-2">
             <FileText className="w-4 h-4" />
             Sales Invoices

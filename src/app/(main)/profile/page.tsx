@@ -1,19 +1,21 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { useAuth } from "@/providers/AuthProvider";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_BILLING_ADDRESSES, GET_PAYMENTS, GET_SALES_INVOICES } from "@/graphql/queries";
-import { UPDATE_USER } from "@/graphql/mutations";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+import { UPDATE_USER, REQUEST_SALES_INVOICE, RESOLVE_SALES_INVOICE } from "@/graphql/mutations";
+import { uploadToCloudinary, uploadPdfToCloudinary, isCloudinaryConfigured } from "@/lib/cloudinary";
+import { useToast } from "@/providers/ToastProvider";
 import type { BillingAddress, Payment, SalesInvoice, Connection } from "@/types";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import {
   User, Mail, CreditCard, FileText, MapPin, Download,
   Sparkles, Shield, ArrowRight, Star, CalendarDays, TrendingUp,
   Camera, Loader2, Check, X, Pencil, Phone, Briefcase, AlertTriangle,
+  Upload, ExternalLink, CheckCircle, Clock, AlertCircle, Receipt,
 } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,15 @@ export default function ProfilePage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const { mutate: updateUser, loading: saving } = useMutation<{ updateUser: { id: string } }>(UPDATE_USER);
+  const { showSuccess, showError } = useToast();
+
+  const { mutate: requestInvoice } = useMutation<{ requestSalesInvoice: { salesInvoice: { id: string } } }>(REQUEST_SALES_INVOICE);
+  const { mutate: resolveInvoice } = useMutation<{ resolveSalesInvoice: { salesInvoice: { id: string } } }>(RESOLVE_SALES_INVOICE);
+
+  const [requestingForPaymentId, setRequestingForPaymentId] = useState<string | null>(null);
+  const [resolvingForInvoiceId, setResolvingForInvoiceId] = useState<string | null>(null);
+  const [pendingResolveInvoiceId, setPendingResolveInvoiceId] = useState<string | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch billing address
   const { data: billingData } = useQuery<{ billingAddresses: Connection<BillingAddress> }>(
@@ -60,12 +71,57 @@ export default function ProfilePage() {
   const payments = extractNodes(paymentData?.payments);
 
   // Fetch invoices
-  const { data: invoiceData } = useQuery<{ salesInvoices: Connection<SalesInvoice> }>(
+  const { data: invoiceData, refetch: refetchInvoices } = useQuery<{ salesInvoices: Connection<SalesInvoice> }>(
     GET_SALES_INVOICES,
     { first: 50 },
     { skip: !user }
   );
   const invoices = extractNodes(invoiceData?.salesInvoices);
+
+  const invoiceByPaymentId = useMemo(() => {
+    const map: Record<string, SalesInvoice> = {};
+    for (const inv of invoices) map[inv.paymentId] = inv;
+    return map;
+  }, [invoices]);
+
+  const handleRequestInvoice = useCallback(async (paymentId: string) => {
+    setRequestingForPaymentId(paymentId);
+    try {
+      const result = await requestInvoice({ input: { paymentId } });
+      if (result?.requestSalesInvoice?.salesInvoice?.id) {
+        showSuccess("Invoice requested.");
+        refetchInvoices();
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Failed to request invoice.");
+    } finally {
+      setRequestingForPaymentId(null);
+    }
+  }, [requestInvoice, showSuccess, showError, refetchInvoices]);
+
+  const handlePdfChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !pendingResolveInvoiceId) return;
+    if (file.type !== "application/pdf") {
+      showError("Please select a PDF file.");
+      return;
+    }
+    setResolvingForInvoiceId(pendingResolveInvoiceId);
+    try {
+      const uploaded = await uploadPdfToCloudinary(file, "zendo/invoices");
+      const result = await resolveInvoice({ input: { id: pendingResolveInvoiceId, attachmentUrl: uploaded.secure_url } });
+      if (result?.resolveSalesInvoice?.salesInvoice) {
+        showSuccess("Invoice resolved — receipt uploaded.");
+        refetchInvoices();
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Failed to resolve invoice.");
+    } finally {
+      setResolvingForInvoiceId(null);
+      setPendingResolveInvoiceId(null);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  }, [pendingResolveInvoiceId, resolveInvoice, showSuccess, showError, refetchInvoices]);
 
   if (!isLoggedIn || !user) {
     return (
@@ -471,26 +527,72 @@ export default function ProfilePage() {
                       <TableHead>Method</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Invoice</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {payments.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="capitalize text-muted-foreground">{p.provider}</TableCell>
-                        <TableCell className="font-bold">{formatCurrency(parseFloat(p.amount || "0"), p.currency)}</TableCell>
-                        <TableCell className="capitalize text-muted-foreground">{p.method}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{p.paidAt ? formatDate(p.paidAt) : "—"}</TableCell>
-                        <TableCell>
-                          {p.refundedAt ? (
-                            <Badge variant="destructive">Refunded</Badge>
-                          ) : p.paidAt ? (
-                            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Paid</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-700">Pending</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {payments.map((p) => {
+                      const inv = invoiceByPaymentId[p.id];
+
+                      let paymentStatusBadge: React.ReactNode;
+                      if (p.refundedAt) {
+                        paymentStatusBadge = <Badge variant="destructive">Refunded</Badge>;
+                      } else if (p.paidAt) {
+                        paymentStatusBadge = <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Paid</Badge>;
+                      } else {
+                        paymentStatusBadge = <Badge variant="secondary" className="bg-amber-100 text-amber-700">Pending</Badge>;
+                      }
+
+                      let invoiceCell: React.ReactNode;
+                      if (inv) {
+                        invoiceCell = (
+                          <div className="flex items-center gap-1.5">
+                            {inv.resolvedAt ? (
+                              <Badge className="bg-green-100 text-green-700 border-green-200 gap-1 text-xs font-medium">
+                                <CheckCircle className="w-3 h-3" /> Resolved
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1 text-xs">
+                                <Clock className="w-3 h-3" /> Requested
+                              </Badge>
+                            )}
+                            {inv.attachmentUrl && (
+                              <a href={inv.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </div>
+                        );
+                      } else if (p.paidAt) {
+                        invoiceCell = (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs gap-1"
+                            disabled={requestingForPaymentId === p.id}
+                            onClick={() => handleRequestInvoice(p.id)}
+                          >
+                            {requestingForPaymentId === p.id
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Receipt className="w-3 h-3" />}
+                            Request
+                          </Button>
+                        );
+                      } else {
+                        invoiceCell = <span className="text-xs text-muted-foreground">—</span>;
+                      }
+
+                      return (
+                        <TableRow key={p.id}>
+                          <TableCell className="capitalize text-muted-foreground">{p.provider}</TableCell>
+                          <TableCell className="font-bold">{formatCurrency(Number.parseFloat(p.amount || "0"), p.currency)}</TableCell>
+                          <TableCell className="capitalize text-muted-foreground">{p.method}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{p.paidAt ? formatDate(p.paidAt) : "—"}</TableCell>
+                          <TableCell>{paymentStatusBadge}</TableCell>
+                          <TableCell>{invoiceCell}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -511,6 +613,14 @@ export default function ProfilePage() {
               </div>
             </CardHeader>
             <CardContent className="pt-6">
+              {/* Hidden PDF input for resolve flow */}
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handlePdfChange}
+              />
               {invoices.length === 0 ? (
                 <div className="text-center py-8">
                   <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3 animate-float" />
@@ -522,22 +632,57 @@ export default function ProfilePage() {
                     <div
                       key={inv.id}
                       style={{ animationDelay: `${i * 0.05}s` }}
-                      className="animate-fade-in flex items-center justify-between bg-muted rounded-xl p-4 border hover:border-primary/30 transition-all group"
+                      className="animate-fade-in flex items-start justify-between bg-muted rounded-xl p-4 border hover:border-primary/30 transition-all group gap-3"
                     >
-                      <div>
-                        <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">Invoice #{inv.id.slice(-6)}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">Invoice #{inv.id.slice(-6)}</p>
+                          {inv.resolvedAt ? (
+                            <Badge className="bg-green-100 text-green-700 border-green-200 gap-1 text-xs">
+                              <CheckCircle className="w-3 h-3" /> Resolved
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 gap-1 text-xs">
+                              <Clock className="w-3 h-3" /> Pending
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
                           Requested: {formatDate(inv.requestedAt)}
                           {inv.resolvedAt && ` · Resolved: ${formatDate(inv.resolvedAt)}`}
                         </p>
                       </div>
-                      {inv.attachmentUrl && (
-                        <Button variant="outline" size="sm" asChild>
-                          <a href={inv.attachmentUrl}>
-                            <Download className="w-3.5 h-3.5 mr-1.5" /> Download
-                          </a>
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {inv.attachmentUrl && (
+                          <Button variant="outline" size="sm" asChild className="h-7 text-xs gap-1">
+                            <a href={inv.attachmentUrl} target="_blank" rel="noopener noreferrer">
+                              <Download className="w-3 h-3" /> Download
+                            </a>
+                          </Button>
+                        )}
+                        {!inv.resolvedAt && isOwner && (
+                          isCloudinaryConfigured() ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              disabled={resolvingForInvoiceId === inv.id}
+                              onClick={() => {
+                                setPendingResolveInvoiceId(inv.id);
+                                pdfInputRef.current?.click();
+                              }}
+                            >
+                              {resolvingForInvoiceId === inv.id
+                                ? <><Loader2 className="w-3 h-3 animate-spin" /> Uploading…</>
+                                : <><Upload className="w-3 h-3" /> Resolve</>}
+                            </Button>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs text-destructive">
+                              <AlertCircle className="w-3.5 h-3.5" /> Cloudinary not configured
+                            </span>
+                          )
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
