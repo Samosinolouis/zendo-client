@@ -33,6 +33,21 @@ export const UPDATE_EMAIL = /* GraphQL */ `
   }
 `;
 
+export const UPDATE_USER_PREFERENCE = /* GraphQL */ `
+  mutation UpdateUserPreference($input: UpdateUserPreferenceInput!) {
+    updateUserPreference(input: $input) {
+      userPreference {
+        id
+        userId
+        notificationsEnabled
+        notificationEnabledList
+        notificationMethod
+        updatedAt
+      }
+    }
+  }
+`;
+
 export const UPDATE_PHONE_NUMBER = /* GraphQL */ `
   mutation UpdatePhoneNumber($input: UpdatePhoneNumberInput!) {
     updatePhoneNumber(input: $input) {

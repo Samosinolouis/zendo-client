@@ -55,15 +55,15 @@ const EVENT_ICON: Record<string, React.ElementType> = {
   GENERAL:                          Megaphone,
 };
 
-const EVENT_COLORS: Record<string, { icon: string; bg: string; border: string; dot: string }> = {
-  APPOINTMENT_CREATED:              { icon: "text-blue-600",   bg: "bg-blue-50",   border: "border-blue-200",   dot: "bg-blue-500"   },
-  APPOINTMENT_PAID:                 { icon: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500" },
-  APPOINTMENT_APPROVED:             { icon: "text-green-600",  bg: "bg-green-50",  border: "border-green-200",  dot: "bg-green-500"  },
-  APPOINTMENT_REJECTED:             { icon: "text-red-600",    bg: "bg-red-50",    border: "border-red-200",    dot: "bg-red-500"    },
-  APPOINTMENT_CANCELLED:            { icon: "text-gray-500",   bg: "bg-gray-50",   border: "border-gray-200",   dot: "bg-gray-400"   },
-  APPOINTMENT_COMPLETED:            { icon: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200", dot: "bg-purple-500" },
-  APPOINTMENT_COMPLETION_REQUESTED: { icon: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200", dot: "bg-orange-500" },
-  GENERAL:                          { icon: "text-gray-600",   bg: "bg-gray-50",   border: "border-gray-200",   dot: "bg-gray-400"   },
+const EVENT_COLORS: Record<string, { icon: string; bg: string; leftBorder: string; dot: string }> = {
+  APPOINTMENT_CREATED:              { icon: "text-blue-600",    bg: "bg-blue-50",    leftBorder: "border-l-blue-500",    dot: "bg-blue-500"    },
+  APPOINTMENT_PAID:                 { icon: "text-emerald-600", bg: "bg-emerald-50", leftBorder: "border-l-emerald-500", dot: "bg-emerald-500"  },
+  APPOINTMENT_APPROVED:             { icon: "text-green-600",   bg: "bg-green-50",   leftBorder: "border-l-green-500",   dot: "bg-green-500"   },
+  APPOINTMENT_REJECTED:             { icon: "text-red-600",     bg: "bg-red-50",     leftBorder: "border-l-red-500",     dot: "bg-red-500"     },
+  APPOINTMENT_CANCELLED:            { icon: "text-gray-500",    bg: "bg-gray-100",   leftBorder: "border-l-gray-400",    dot: "bg-gray-400"    },
+  APPOINTMENT_COMPLETED:            { icon: "text-purple-600",  bg: "bg-purple-50",  leftBorder: "border-l-purple-500",  dot: "bg-purple-500"  },
+  APPOINTMENT_COMPLETION_REQUESTED: { icon: "text-orange-600",  bg: "bg-orange-50",  leftBorder: "border-l-orange-500",  dot: "bg-orange-500"  },
+  GENERAL:                          { icon: "text-gray-600",    bg: "bg-gray-50",    leftBorder: "border-l-gray-400",    dot: "bg-gray-400"    },
 };
 
 function getColors(event: string) {
@@ -181,7 +181,7 @@ export default function NotificationsPage() {
             <p className="text-muted-foreground">We&apos;ll let you know when something important happens.</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {notifications.map((notif, i) => {
               const payload  = parsePayload(notif);
               const Icon     = getIcon(payload.event);
@@ -193,34 +193,43 @@ export default function NotificationsPage() {
                 <Card
                   key={notif.id}
                   style={{ animationDelay: `${i * 0.04}s` }}
-                  className={`animate-slide-up ${
-                    delivered
-                      ? "opacity-70 hover:opacity-100 transition-opacity"
-                      : `border-2 ${colors.bg} ${colors.border} hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`
+                  className={`animate-slide-up border-l-4 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 ${
+                    delivered ? "border-l-transparent" : colors.leftBorder
                   }`}
                 >
-                  <CardContent className="p-4 flex items-start gap-4">
+                  <CardContent className="p-4 flex items-start gap-3">
                     {/* Icon */}
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                      delivered ? colors.bg : "bg-white shadow-sm"
-                    }`}>
-                      <Icon className={`w-5 h-5 ${colors.icon}`} />
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${colors.bg}`}>
+                      <Icon className={`w-4 h-4 ${colors.icon}`} />
                     </div>
 
                     {/* Body */}
                     <div className="flex-1 min-w-0 space-y-1">
-                      {payload.subject && (
-                        <p className={`text-xs font-bold uppercase tracking-wide ${colors.icon}`}>
-                          {payload.subject}
-                        </p>
-                      )}
+                      {/* Header row: subject + timestamp */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          {payload.subject && (
+                            <span className={`text-xs font-semibold ${colors.icon}`}>
+                              {payload.subject}
+                            </span>
+                          )}
+                          {!delivered && (
+                            <span className={`w-1.5 h-1.5 ${colors.dot} rounded-full`} />
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatDateTime(notif.createdAt ?? "")}
+                        </span>
+                      </div>
+
+                      {/* Message */}
                       <p className={`text-sm leading-snug ${
-                        delivered ? "text-foreground" : "font-medium text-foreground"
+                        delivered ? "text-muted-foreground" : "text-foreground"
                       }`}>
                         {payload.message}
                       </p>
 
-                      {/* Amount pill */}
+                      {/* Amount */}
                       {payload.amount !== undefined && payload.currency && (
                         <p className="text-xs text-muted-foreground">
                           {formatCurrency(payload.amount, payload.currency)}
@@ -230,7 +239,7 @@ export default function NotificationsPage() {
                       {/* Completion proof */}
                       {isCompletionRequest && payload.completedProofUrl && (
                         <>
-                          <Separator className="my-1" />
+                          <Separator className="my-1.5" />
                           <div className="flex items-center justify-between gap-3">
                             <a
                               href={payload.completedProofUrl}
@@ -252,22 +261,14 @@ export default function NotificationsPage() {
                         </>
                       )}
 
-                      <p className="text-xs text-muted-foreground pt-0.5">
-                        {formatDateTime(notif.createdAt ?? "")}
-                      </p>
-                    </div>
-
-                    {/* Unread dot + deep-link arrow */}
-                    <div className="flex flex-col items-center gap-2 shrink-0">
-                      {!delivered && (
-                        <div className={`w-2.5 h-2.5 ${colors.dot} rounded-full animate-pulse`} />
-                      )}
+                      {/* Appointment deep-link */}
                       {payload.appointmentId && !isCompletionRequest && (
-                        <Button size="icon" variant="ghost" asChild className="h-7 w-7">
-                          <Link href="/appointments">
-                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
-                          </Link>
-                        </Button>
+                        <Link
+                          href="/appointments"
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors pt-0.5"
+                        >
+                          View appointment <ArrowRight className="w-3 h-3" />
+                        </Link>
                       )}
                     </div>
                   </CardContent>

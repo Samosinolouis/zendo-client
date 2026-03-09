@@ -198,6 +198,18 @@ export interface Payment {
   updatedAt?: string;
 }
 
+// ── User Preference ───────────────────────────────────────────
+
+export interface UserPreference {
+  id: string;
+  userId: string;
+  notificationsEnabled: boolean;
+  notificationMethod: "EMAIL" | "SMS";
+  notificationEnabledList: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // ── Payment Link ──────────────────────────────────────────────
 
 export interface PaymentLink {

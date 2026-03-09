@@ -19,6 +19,13 @@ export const GET_USER = /* GraphQL */ `
       bannerImageUrl
       createdAt
       updatedAt
+      userPreference {
+        id
+        notificationsEnabled
+        notificationEnabledList
+        notificationMethod
+        updatedAt
+      }
     }
   }
 `;
