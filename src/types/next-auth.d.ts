@@ -32,6 +32,8 @@ declare module "next-auth" {
     };
     /** Application-level user record from the backend DB (null if not yet onboarded) */
     appUser: AppUser | null;
+    /** Keycloak realm roles (e.g. ["ADMIN"]) */
+    roles: string[];
   }
 }
 
@@ -44,5 +46,7 @@ declare module "next-auth/jwt" {
     error?: string;
     /** Application-level user record from the backend DB (null if not yet onboarded) */
     appUser?: AppUser | null;
+    /** Keycloak realm roles extracted from the access token */
+    roles?: string[];
   }
 }

@@ -36,6 +36,7 @@ interface AuthContextType {
   appUser: AppUser | null;
   isLoggedIn: boolean;
   isOwner: boolean;
+  isAdmin: boolean;
   businesses: Business[];
   login: () => void;
   logout: () => void;
@@ -51,6 +52,7 @@ const AuthContext = createContext<AuthContextType>({
   appUser: null,
   isLoggedIn: false,
   isOwner: false,
+  isAdmin: false,
   businesses: [],
   login: () => {},
   logout: () => {},
@@ -176,6 +178,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
 
   const isLoggedIn = status === "authenticated" && user !== null;
   const isOwner = user?.isBusinessOwner === true;
+  const isAdmin = (session?.roles ?? []).includes("admin");
 
   const login = useCallback(() => {
     signIn("keycloak", { callbackUrl: "/onboarding" });
@@ -194,6 +197,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         appUser,
         isLoggedIn,
         isOwner,
+        isAdmin,
         businesses,
         login,
         logout,

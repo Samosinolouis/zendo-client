@@ -16,7 +16,7 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (pathname.startsWith("/api/auth/signin") && req.nextUrl.searchParams.has("error")) {
-    return NextResponse.redirect(new URL("/", req.url));
+    return NextResponse.redirect(new URL("/", req.url));  
   }
 
   // Let auth API and static assets through unconditionally.
@@ -53,6 +53,14 @@ export async function middleware(req: NextRequest) {
       onboardingUrl.searchParams.set("r", pathname);
     }
     return NextResponse.redirect(onboardingUrl);
+  }
+
+  // Admin routes require the ADMIN Keycloak realm role.
+  if (pathname.startsWith("/admin")) {
+    const roles = (token as any).roles as string[] | undefined;
+    if (!roles?.includes("admin")) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
   }
 
   return NextResponse.next();

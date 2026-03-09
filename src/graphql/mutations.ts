@@ -540,3 +540,29 @@ export const CREATE_TAG = /* GraphQL */ `
     }
   }
 `;
+
+// ── Admin / Finance ─────────────────────────────────────────
+
+export const GENERATE_BUSINESS_PAYMENT_STATEMENT = /* GraphQL */ `
+  mutation GenerateBusinessPaymentStatement($input: GeneratePaymentStatementInput!) {
+    generateBusinessPaymentStatement(input: $input) {
+      payoutStatement {
+        id
+        businessId
+        periodStart
+        periodEnd
+        grossCollection
+        totalFees
+        withholdingTax
+        netPayout
+        createdAt
+      }
+      serviceBillings {
+        id
+        payoutStatementId
+        payload
+        createdAt
+      }
+    }
+  }
+`;

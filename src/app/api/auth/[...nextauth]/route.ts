@@ -5,6 +5,23 @@ import type { AppUser } from "@/types/next-auth";
 const GRAPHQL_ENDPOINT =
   process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT ?? "http://localhost:4000/graphql";
 
+/** Decode a JWT payload without verifying the signature (claims only). */
+function decodeJwtPayload(jwt: string): Record<string, unknown> {
+  try {
+    const base64 = jwt.split(".")[1];
+    return JSON.parse(Buffer.from(base64, "base64url").toString("utf-8")) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+/** Extract Keycloak realm roles from a raw access token string. */
+function extractRoles(accessToken: string): string[] {
+  const payload = decodeJwtPayload(accessToken);
+  const realmAccess = payload.realm_access as { roles?: string[] } | undefined;
+  return realmAccess?.roles ?? [];
+}
+
 /** Fetch the application-level user from the backend DB using the Keycloak sub as the ID. */
 async function fetchAppUser(
   accessToken: string,
@@ -78,6 +95,7 @@ async function refreshAccessToken(token: any) {
       accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000,
       refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
       idToken: refreshedTokens.id_token,
+      roles: extractRoles(newAccessToken),
       appUser, // Re-fetched fresh appUser with new token
     };
   } catch (error) {
@@ -113,6 +131,7 @@ const handler = NextAuth({
         token.refreshToken = account.refresh_token;
         token.accessTokenExpires = account.expires_at! * 1000;
         // Try to fetch the app user (null if not yet onboarded)
+        token.roles = extractRoles(account.access_token!);
         token.appUser = await fetchAppUser(account.access_token!, token.sub!);
         return token;
       }
@@ -151,6 +170,7 @@ const handler = NextAuth({
       session.refreshToken = token.refreshToken as string;
       // Carry the app user into the session (null if not yet onboarded)
       session.appUser = token.appUser ?? null;
+      session.roles = token.roles ?? [];
 
       if (session.user && token.sub) {
         session.user.id = token.sub;

@@ -376,6 +376,22 @@ export type DeleteTodoPayload = {
   success: Scalars['Boolean']['output'];
 };
 
+export type GeneratePaymentStatementInput = {
+  /** ID of the business to generate the statement for */
+  businessId: Scalars['ID']['input'];
+  /**
+   * Optional cutoff date for the period (defaults to the current date/time).
+   * Must be after the business's last payout period end date.
+   */
+  periodEnd?: InputMaybe<Scalars['DateTime']['input']>;
+};
+
+export type GeneratePaymentStatementPayload = {
+  __typename?: 'GeneratePaymentStatementPayload';
+  payoutStatement: PayoutStatement;
+  serviceBillings: Array<ServiceBilling>;
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   /**
@@ -426,6 +442,13 @@ export type Mutation = {
   deleteServicePage: DeleteServicePagePayload;
   /** Delete a todo (owner only) */
   deleteTodo: DeleteTodoPayload;
+  /**
+   * Auto-generate a payout statement for a business.
+   * Fetches all paid payments since the last payout period, creates per-payment
+   * BIR-compliant service billings, and advances the period watermark.
+   * The caller must own the business.
+   */
+  generateBusinessPaymentStatement: GeneratePaymentStatementPayload;
   /**
    * Onboarding transaction: creates user profile, billing address,
    * and optionally a business in a single atomic operation.
@@ -550,6 +573,11 @@ export type MutationDeleteServicePageArgs = {
 
 export type MutationDeleteTodoArgs = {
   input: DeleteTodoInput;
+};
+
+
+export type MutationGenerateBusinessPaymentStatementArgs = {
+  input: GeneratePaymentStatementInput;
 };
 
 
