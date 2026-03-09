@@ -1,20 +1,18 @@
 ﻿"use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/providers/ToastProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import type { GraphQLError } from "@/lib/graphql-client";
-import { GET_SERVICES, GET_SERVICE_TAGS_BY_SERVICE, GET_TAGS } from "@/graphql/queries";
+import { GET_SERVICES } from "@/graphql/queries";
 import {
   CREATE_SERVICE,
   UPDATE_SERVICE,
   DELETE_SERVICE,
-  ADD_SERVICE_TAG,
-  REMOVE_SERVICE_TAG,
 } from "@/graphql/mutations";
-import type { Service, ServiceTag, Tag, Connection } from "@/types";
+import type { Service, Connection } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +20,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ImageUpload } from "@/components/ui/image-upload";
 import {
   Dialog,
@@ -55,6 +52,7 @@ import {
   ImageIcon,
   PhilippinePeso,
   Tag as TagIcon,
+  X,
 } from "lucide-react";
 
 // GQL Error resolver
@@ -78,6 +76,7 @@ interface ServiceFormState {
   bannerImageUrl: string;
   minPrice: string;
   maxPrice: string;
+  tags: string[];
 }
 
 const emptyForm = (): ServiceFormState => ({
@@ -86,26 +85,75 @@ const emptyForm = (): ServiceFormState => ({
   bannerImageUrl: "",
   minPrice: "",
   maxPrice: "",
+  tags: [],
 });
 
 interface ServiceFormProps {
   state: ServiceFormState;
   onChange: (patch: Partial<ServiceFormState>) => void;
-  allTags: Tag[];
-  selectedTagIds: string[];
-  onToggleTag: (tagId: string) => void;
   /** If provided, renders the business selector */
   businesses?: Array<{ id: string; name: string }>;
   selectedBizId?: string;
   onSelectBiz?: (id: string) => void;
 }
 
+// Tag chip input
+
+function TagInput({
+  tags,
+  onChange,
+}: Readonly<{ tags: string[]; onChange: (tags: string[]) => void }>) {
+  const [input, setInput] = useState("");
+
+  const addTag = (raw: string) => {
+    const trimmed = raw.trim().toLowerCase();
+    if (trimmed && !tags.includes(trimmed)) {
+      onChange([...tags, trimmed]);
+    }
+    setInput("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(input);
+    } else if (e.key === "Backspace" && input === "" && tags.length > 0) {
+      onChange(tags.slice(0, -1));
+    }
+  };
+
+  return (
+    <div className="rounded-md border p-2 flex flex-wrap gap-1.5 min-h-10.5 cursor-text focus-within:ring-2 focus-within:ring-ring">
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium rounded-full px-2.5 py-0.5"
+        >
+          {tag}
+          <button
+            type="button"
+            onClick={() => onChange(tags.filter((t) => t !== tag))}
+            className="hover:text-destructive transition-colors ml-0.5"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        className="flex-1 min-w-35 outline-none text-sm bg-transparent placeholder:text-muted-foreground"
+        placeholder={tags.length === 0 ? "Add tags… (press Enter or ,)" : "Add more…"}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => { if (input.trim()) addTag(input); }}
+      />
+    </div>
+  );
+}
+
 function ServiceForm({
   state,
   onChange,
-  allTags,
-  selectedTagIds,
-  onToggleTag,
   businesses,
   selectedBizId,
   onSelectBiz,
@@ -224,31 +272,19 @@ function ServiceForm({
       </p>
 
       {/* Tags */}
-      {allTags.length > 0 && (
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2">
-            <TagIcon className="w-4 h-4" />
-            Tags
-          </Label>
-          <div className="rounded-md border p-3 max-h-40 overflow-y-auto space-y-2">
-            {allTags.map((tag) => (
-              <div key={tag.id} className="flex items-center gap-2">
-                <Checkbox
-                  id={`tag-${tag.id}`}
-                  checked={selectedTagIds.includes(tag.id)}
-                  onCheckedChange={() => onToggleTag(tag.id)}
-                />
-                <Label
-                  htmlFor={`tag-${tag.id}`}
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  {tag.name}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="space-y-2">
+        <Label className="flex items-center gap-2">
+          <TagIcon className="w-4 h-4" />
+          Tags
+        </Label>
+        <TagInput
+          tags={state.tags}
+          onChange={(tags) => onChange({ tags })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Press Enter or comma to add a tag. Tags help customers discover your service.
+        </p>
+      </div>
     </div>
   );
 }
@@ -283,10 +319,6 @@ export default function OwnerServicesPage() {
   const [createForm, setCreateForm] = useState<ServiceFormState>(emptyForm());
   const [editForm, setEditForm] = useState<ServiceFormState>(emptyForm());
 
-  // Tag selection state
-  const [createSelectedTagIds, setCreateSelectedTagIds] = useState<string[]>([]);
-  const [editSelectedTagIds, setEditSelectedTagIds] = useState<string[]>([]);
-
   const bizIds = useMemo(() => businesses.map((b) => b.id), [businesses]);
 
   // Queries
@@ -295,29 +327,6 @@ export default function OwnerServicesPage() {
     { first: 200 },
     { skip: bizIds.length === 0 },
   );
-
-  const { data: tagsData } = useQuery<{ tags: Connection<Tag> }>(
-    GET_TAGS,
-    { first: 100 },
-  );
-  const allTags = useMemo(() => extractNodes(tagsData?.tags), [tagsData]);
-
-  const { data: editServiceTagsData } = useQuery<{
-    serviceTagsByService: ServiceTag[];
-  }>(
-    GET_SERVICE_TAGS_BY_SERVICE,
-    { serviceId: editTarget?.id ?? "" },
-    { skip: !editTarget },
-  );
-
-  // Sync editSelectedTagIds when service tag data loads for the edit target
-  useEffect(() => {
-    if (editServiceTagsData) {
-      setEditSelectedTagIds(
-        editServiceTagsData.serviceTagsByService.map((st) => st.tagId),
-      );
-    }
-  }, [editServiceTagsData]);
 
   const allServices = useMemo<ServiceWithBizName[]>(() => {
     const bizNameMap: Record<string, string> = {};
@@ -346,31 +355,7 @@ export default function OwnerServicesPage() {
     onError: (err) => showError(resolveGqlError(err)),
   });
 
-  const { mutate: addServiceTag } = useMutation<{
-    addServiceTag: { serviceTag: ServiceTag };
-  }>(ADD_SERVICE_TAG, {
-    onError: (err) => showError(resolveGqlError(err)),
-  });
-
-  const { mutate: removeServiceTag } = useMutation<{
-    removeServiceTag: { success: boolean };
-  }>(REMOVE_SERVICE_TAG, {
-    onError: (err) => showError(resolveGqlError(err)),
-  });
-
   if (!user) return null;
-
-  // Tag helpers
-
-  const toggleCreateTag = (tagId: string) =>
-    setCreateSelectedTagIds((prev) =>
-      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId],
-    );
-
-  const toggleEditTag = (tagId: string) =>
-    setEditSelectedTagIds((prev) =>
-      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId],
-    );
 
   // Handlers
 
@@ -383,20 +368,13 @@ export default function OwnerServicesPage() {
         bannerImageUrl: createForm.bannerImageUrl || undefined,
         minPrice: createForm.minPrice ? Number.parseFloat(createForm.minPrice) : undefined,
         maxPrice: createForm.maxPrice ? Number.parseFloat(createForm.maxPrice) : undefined,
+        tags: createForm.tags,
       },
     });
     if (res) {
-      const newServiceId = res.createService.service.id;
-      // Add selected tags
-      await Promise.all(
-        createSelectedTagIds.map((tagId) =>
-          addServiceTag({ input: { serviceId: newServiceId, tagId } }),
-        ),
-      );
       setShowCreate(false);
       setCreateForm(emptyForm());
       setSelectedBizId("");
-      setCreateSelectedTagIds([]);
       refetch();
       showSuccess("Service created successfully.");
     }
@@ -409,8 +387,8 @@ export default function OwnerServicesPage() {
       bannerImageUrl: svc.bannerImageUrl ?? "",
       minPrice: svc.minPrice == null ? "" : String(svc.minPrice),
       maxPrice: svc.maxPrice == null ? "" : String(svc.maxPrice),
+      tags: svc.tags ?? [],
     });
-    setEditSelectedTagIds([]); // will be overwritten by useEffect when data loads
     setEditTarget(svc);
   };
 
@@ -424,24 +402,10 @@ export default function OwnerServicesPage() {
         bannerImageUrl: editForm.bannerImageUrl || undefined,
         minPrice: editForm.minPrice ? Number.parseFloat(editForm.minPrice) : undefined,
         maxPrice: editForm.maxPrice ? Number.parseFloat(editForm.maxPrice) : undefined,
+        tags: editForm.tags,
       },
     });
     if (!res) return;
-
-    // Sync tags: compute diff
-    const originalServiceTags = editServiceTagsData?.serviceTagsByService ?? [];
-    const originalTagIds = new Set(originalServiceTags.map((st) => st.tagId));
-    const toAdd = editSelectedTagIds.filter((id) => !originalTagIds.has(id));
-    const toRemove = originalServiceTags.filter(
-      (st) => !editSelectedTagIds.includes(st.tagId),
-    );
-
-    await Promise.all([
-      ...toAdd.map((tagId) =>
-        addServiceTag({ input: { serviceId: editTarget.id, tagId } }),
-      ),
-      ...toRemove.map((st) => removeServiceTag({ input: { id: st.id } })),
-    ]);
 
     setEditTarget(null);
     refetch();
@@ -593,6 +557,20 @@ export default function OwnerServicesPage() {
                       No description yet. Click ••• → Edit to add one.
                     </p>
                   )}
+                  {svc.tags && svc.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {svc.tags.slice(0, 4).map((tag) => (
+                        <Badge key={tag} variant="secondary" className="text-xs py-0 px-1.5">
+                          {tag}
+                        </Badge>
+                      ))}
+                      {svc.tags.length > 4 && (
+                        <Badge variant="secondary" className="text-xs py-0 px-1.5">
+                          +{svc.tags.length - 4}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -608,7 +586,6 @@ export default function OwnerServicesPage() {
           if (!open) {
             setCreateForm(emptyForm());
             setSelectedBizId("");
-            setCreateSelectedTagIds([]);
           }
         }}
         modal={false}
@@ -623,9 +600,6 @@ export default function OwnerServicesPage() {
           <ServiceForm
             state={createForm}
             onChange={(patch) => setCreateForm((prev) => ({ ...prev, ...patch }))}
-            allTags={allTags}
-            selectedTagIds={createSelectedTagIds}
-            onToggleTag={toggleCreateTag}
             businesses={businesses}
             selectedBizId={selectedBizId}
             onSelectBiz={setSelectedBizId}
@@ -637,7 +611,6 @@ export default function OwnerServicesPage() {
                 setShowCreate(false);
                 setCreateForm(emptyForm());
                 setSelectedBizId("");
-                setCreateSelectedTagIds([]);
               }}
             >
               Cancel
@@ -669,9 +642,6 @@ export default function OwnerServicesPage() {
           <ServiceForm
             state={editForm}
             onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))}
-            allTags={allTags}
-            selectedTagIds={editSelectedTagIds}
-            onToggleTag={toggleEditTag}
           />
           <DialogFooter className="pt-2">
             <Button variant="outline" onClick={() => setEditTarget(null)}>

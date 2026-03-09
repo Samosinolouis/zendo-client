@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useQuery, extractNodes } from "@/graphql/hooks";
-import { GET_BUSINESSES, GET_SERVICES, GET_TAGS } from "@/graphql/queries";
-import type { Business, Service, Tag, Connection } from "@/types";
+import { GET_BUSINESSES, GET_SERVICES } from "@/graphql/queries";
+import type { Business, Service, Connection } from "@/types";
 import {
   Search, ArrowRight, X, Sparkles, Compass, Star, Zap,
   TrendingUp, Building2,
@@ -34,12 +34,6 @@ export default function ExplorePage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Fetch tags
-  const { data: tagsData } = useQuery<{ tags: Connection<Tag> }>(
-    GET_TAGS, { first: 50 }
-  );
-  const tags = extractNodes(tagsData?.tags);
-
   // Fetch businesses
   const { data: bizData, loading: bizLoading } = useQuery<{ businesses: Connection<Business> }>(
     GET_BUSINESSES, { first: 50, search: debouncedSearch || undefined }
@@ -50,7 +44,22 @@ export default function ExplorePage() {
   const { data: svcData, loading: svcLoading } = useQuery<{ services: Connection<Service> }>(
     GET_SERVICES, { first: 50, search: debouncedSearch || undefined }
   );
-  const services = extractNodes(svcData?.services);
+  const allServices = useMemo(() => extractNodes(svcData?.services), [svcData]);
+
+  // Derive unique tags from loaded services
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const svc of allServices) {
+      for (const tag of svc.tags ?? []) tagSet.add(tag);
+    }
+    return [...tagSet].sort((a, b) => a.localeCompare(b));
+  }, [allServices]);
+
+  // Filter services client-side when a tag is selected
+  const services = useMemo(
+    () => (selectedTag ? allServices.filter((s) => (s.tags ?? []).includes(selectedTag)) : allServices),
+    [allServices, selectedTag],
+  );
 
   const getBusinessName = (businessId: string) =>
     businesses.find(b => b.id === businessId)?.name ?? "Business";
@@ -145,16 +154,16 @@ className="relative bg-hero min-h-110 flex flex-col items-center justify-center 
           >
             <Sparkles className="w-3.5 h-3.5 mr-1.5" /> All Services
           </Button>
-          {tags.map((tag, i) => (
+          {allTags.map((tag, i) => (
             <Button
-              key={tag.id}
-              variant={selectedTag === tag.name ? "default" : "outline"}
+              key={tag}
+              variant={selectedTag === tag ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedTag(tag.name === selectedTag ? null : tag.name)}
+              onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
               style={{ animationDelay: `${i * 0.04}s` }}
-              className={`rounded-full animate-scale-in ${selectedTag === tag.name ? "shadow-lg shadow-primary/30 scale-105" : ""}`}
+              className={`rounded-full animate-scale-in ${selectedTag === tag ? "shadow-lg shadow-primary/30 scale-105" : ""}`}
             >
-              {tag.name}
+              {tag}
             </Button>
           ))}
         </div>
@@ -266,6 +275,20 @@ className="relative bg-hero min-h-110 flex flex-col items-center justify-center 
                       <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2 leading-relaxed">
                         {service.description}
                       </p>
+                      {(service.tags ?? []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {(service.tags ?? []).slice(0, 3).map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              className="text-xs py-0 px-1.5 cursor-pointer"
+                              onClick={(e) => { e.preventDefault(); setSelectedTag(tag); }}
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                       <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
                         <div className="flex items-center gap-1.5">
                           <div className="w-5 h-5 rounded-full bg-linear-to-br from-primary to-primary/80 flex items-center justify-center">
