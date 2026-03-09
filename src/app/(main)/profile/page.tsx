@@ -13,7 +13,7 @@ import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import {
   User, Mail, CreditCard, FileText, MapPin, Download,
   Sparkles, Shield, ArrowRight, Star, CalendarDays, TrendingUp,
-  Camera, Loader2, Check, X, Pencil, Phone,
+  Camera, Loader2, Check, X, Pencil, Phone, Briefcase, AlertTriangle,
 } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,8 @@ export default function ProfilePage() {
   const [editForm, setEditForm] = useState({ firstName: "", lastName: "", middleName: "", suffix: "", mobileCountryCode: "+63", mobileLocalNumber: "" });
   const [uploading, setUploading] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
+  const [confirmingUpgrade, setConfirmingUpgrade] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
@@ -144,6 +146,17 @@ export default function ProfilePage() {
       console.error("Banner upload failed:", err);
     } finally {
       setBannerUploading(false);
+    }
+  };
+
+  const handleUpgradeToOwner = async () => {
+    setUpgrading(true);
+    try {
+      await updateUser({ id: user.id, input: { isBusinessOwner: true } });
+      refreshUser();
+      setConfirmingUpgrade(false);
+    } finally {
+      setUpgrading(false);
     }
   };
 
@@ -356,6 +369,52 @@ export default function ProfilePage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Upgrade to Business Owner */}
+          {!isOwner && (
+            <Card className="animate-slide-up overflow-hidden border-primary/20" style={{ animationDelay: "0.05s" }}>
+              <CardHeader className="bg-linear-to-r from-primary/5 to-transparent">
+                <CardTitle className="flex items-center gap-3 text-base">
+                  <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <Briefcase className="w-4 h-4 text-primary" />
+                  </div>
+                  Become a Business Owner
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                {confirmingUpgrade ? (
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <p>
+                        This action is <strong>permanent</strong>. Once you become a Business Owner, this cannot be reversed. You will gain access to the owner dashboard to create and manage businesses and services.
+                      </p>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" size="sm" onClick={() => setConfirmingUpgrade(false)} disabled={upgrading}>
+                        <X className="w-3.5 h-3.5 mr-1" /> Cancel
+                      </Button>
+                      <Button size="sm" onClick={handleUpgradeToOwner} disabled={upgrading}>
+                        {upgrading
+                          ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                          : <Check className="w-3.5 h-3.5 mr-1" />}
+                        Yes, make me a Business Owner
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-sm text-muted-foreground">
+                      Unlock the owner dashboard to create businesses, list services, and accept appointments.
+                    </p>
+                    <Button size="sm" className="shrink-0" onClick={() => setConfirmingUpgrade(true)}>
+                      <Briefcase className="w-3.5 h-3.5 mr-1.5" /> Upgrade
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Billing Address */}
           <Card className="animate-slide-up overflow-hidden" style={{ animationDelay: "0.1s" }}>
