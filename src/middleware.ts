@@ -15,7 +15,11 @@ import type { NextRequest } from "next/server";
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Let the onboarding page, auth API, and static assets through unconditionally.
+  if (pathname.startsWith("/api/auth/signin") && req.nextUrl.searchParams.has("error")) {
+    return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  // Let auth API and static assets through unconditionally.
   if (
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
@@ -33,6 +37,15 @@ export async function middleware(req: NextRequest) {
 
   // Authenticated but onboarding not done (appUser is null).
   const appUser = (token as any).appUser;
+
+  // Handle onboarding route explicitly to avoid self-redirect loops.
+  if (pathname.startsWith("/onboarding")) {
+    if (appUser) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+    return NextResponse.next();
+  }
+
   if (!appUser) {
     const onboardingUrl = new URL(`/onboarding`, req.url);
     // Preserve the originally requested page so onboarding can redirect back.
@@ -40,13 +53,6 @@ export async function middleware(req: NextRequest) {
       onboardingUrl.searchParams.set("r", pathname);
     }
     return NextResponse.redirect(onboardingUrl);
-  } else if (appUser && pathname.startsWith("/onboarding")) {
-    console.log(
-      "Middleware - Authenticated user trying to access onboarding, redirecting to home.",
-    );
-
-    // Authenticated and onboarding done but trying to access onboarding page — redirect to home.
-    return NextResponse.redirect(new URL("/", req.url));
   }
 
   return NextResponse.next();
