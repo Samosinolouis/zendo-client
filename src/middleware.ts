@@ -17,7 +17,6 @@ export async function middleware(req: NextRequest) {
 
   // Let the onboarding page, auth API, and static assets through unconditionally.
   if (
-    pathname.startsWith("/onboarding") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
@@ -41,6 +40,13 @@ export async function middleware(req: NextRequest) {
       onboardingUrl.searchParams.set("r", pathname);
     }
     return NextResponse.redirect(onboardingUrl);
+  } else if (appUser && pathname.startsWith("/onboarding")) {
+    console.log(
+      "Middleware - Authenticated user trying to access onboarding, redirecting to home.",
+    );
+
+    // Authenticated and onboarding done but trying to access onboarding page — redirect to home.
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
   return NextResponse.next();
