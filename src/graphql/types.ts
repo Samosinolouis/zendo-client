@@ -16,16 +16,6 @@ export type Scalars = {
   JSON: { input: any; output: any; }
 };
 
-export type AddServiceTagInput = {
-  serviceId: Scalars['ID']['input'];
-  tagId: Scalars['ID']['input'];
-};
-
-export type AddServiceTagPayload = {
-  __typename?: 'AddServiceTagPayload';
-  serviceTag: ServiceTag;
-};
-
 export type ApproveServiceAppointmentPayload = {
   __typename?: 'ApproveServiceAppointmentPayload';
   serviceAppointment: ServiceAppointment;
@@ -316,21 +306,12 @@ export type CreateServiceInput = {
   maxPrice?: InputMaybe<Scalars['Float']['input']>;
   minPrice?: InputMaybe<Scalars['Float']['input']>;
   name: Scalars['String']['input'];
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
 export type CreateServicePayload = {
   __typename?: 'CreateServicePayload';
   service: Service;
-};
-
-export type CreateTagInput = {
-  description?: InputMaybe<Scalars['String']['input']>;
-  name: Scalars['String']['input'];
-};
-
-export type CreateTagPayload = {
-  __typename?: 'CreateTagPayload';
-  tag: Tag;
 };
 
 export type CreateTodoInput = {
@@ -385,16 +366,6 @@ export type DeleteServicePayload = {
   success: Scalars['Boolean']['output'];
 };
 
-export type DeleteTagInput = {
-  id: Scalars['ID']['input'];
-};
-
-export type DeleteTagPayload = {
-  __typename?: 'DeleteTagPayload';
-  deletedId: Scalars['ID']['output'];
-  success: Scalars['Boolean']['output'];
-};
-
 export type DeleteTodoInput = {
   id: Scalars['ID']['input'];
 };
@@ -412,8 +383,6 @@ export type Mutation = {
    * and extend this type.
    */
   _empty?: Maybe<Scalars['String']['output']>;
-  /** Add a tag to a service (service owner only) */
-  addServiceTag: AddServiceTagPayload;
   /** Approve a service appointment — only callable by the business owner */
   approveServiceAppointment: ApproveServiceAppointmentPayload;
   /** Cancel a payment link (owner only) */
@@ -445,8 +414,6 @@ export type Mutation = {
   createServiceBilling: CreateServiceBillingPayload;
   /** Submit a feedback/review for a service (requires authentication) */
   createServiceFeedback: CreateServiceFeedbackPayload;
-  /** Create a new tag */
-  createTag: CreateTagPayload;
   /** Create a new todo (requires authentication) */
   createTodo: CreateTodoPayload;
   /** Delete a business (owner only) */
@@ -457,8 +424,6 @@ export type Mutation = {
   deleteServiceForm: DeleteServiceFormPayload;
   /** Delete a service page (service owner only) */
   deleteServicePage: DeleteServicePagePayload;
-  /** Delete a tag */
-  deleteTag: DeleteTagPayload;
   /** Delete a todo (owner only) */
   deleteTodo: DeleteTodoPayload;
   /**
@@ -468,8 +433,6 @@ export type Mutation = {
   processOnboarding: ProcessOnboardingPayload;
   /** Reject a service appointment — only callable by the business owner */
   rejectServiceAppointment: RejectServiceAppointmentPayload;
-  /** Remove a tag from a service (service owner only) */
-  removeServiceTag: RemoveServiceTagPayload;
   /** Request a sales invoice for a payment (customer only) */
   requestSalesInvoice: RequestSalesInvoicePayload;
   /** Resolve a sales invoice with attachment (business owner only) */
@@ -486,21 +449,16 @@ export type Mutation = {
   updatePhoneNumber: UpdatePhoneNumberPayload;
   /** Update a service (business owner only) */
   updateService: UpdateServicePayload;
-  /** Update an existing tag */
-  updateTag: UpdateTagPayload;
   /** Update an existing todo (owner only) */
   updateTodo: UpdateTodoPayload;
   /** Update user profile info (owner only) */
   updateUser: UpdateUserPayload;
+  /** Update the authenticated user's notification preferences (owner only) */
+  updateUserPreference: UpdateUserPreferencePayload;
   /** Create or update the form for a service (service owner only) */
   upsertServiceForm: UpsertServiceFormPayload;
   /** Create or update the page for a service (service owner only) */
   upsertServicePage: UpsertServicePagePayload;
-};
-
-
-export type MutationAddServiceTagArgs = {
-  input: AddServiceTagInput;
 };
 
 
@@ -565,11 +523,6 @@ export type MutationCreateServiceFeedbackArgs = {
 };
 
 
-export type MutationCreateTagArgs = {
-  input: CreateTagInput;
-};
-
-
 export type MutationCreateTodoArgs = {
   input: CreateTodoInput;
 };
@@ -595,11 +548,6 @@ export type MutationDeleteServicePageArgs = {
 };
 
 
-export type MutationDeleteTagArgs = {
-  input: DeleteTagInput;
-};
-
-
 export type MutationDeleteTodoArgs = {
   input: DeleteTodoInput;
 };
@@ -612,11 +560,6 @@ export type MutationProcessOnboardingArgs = {
 
 export type MutationRejectServiceAppointmentArgs = {
   id: Scalars['ID']['input'];
-};
-
-
-export type MutationRemoveServiceTagArgs = {
-  input: RemoveServiceTagInput;
 };
 
 
@@ -660,11 +603,6 @@ export type MutationUpdateServiceArgs = {
 };
 
 
-export type MutationUpdateTagArgs = {
-  input: UpdateTagInput;
-};
-
-
 export type MutationUpdateTodoArgs = {
   input: UpdateTodoInput;
 };
@@ -672,6 +610,11 @@ export type MutationUpdateTodoArgs = {
 
 export type MutationUpdateUserArgs = {
   input: UpdateUserInput;
+};
+
+
+export type MutationUpdateUserPreferenceArgs = {
+  input: UpdateUserPreferenceInput;
 };
 
 
@@ -775,6 +718,11 @@ export type OnboardingUserInput = {
 
 /** Input for the user notification preferences during onboarding */
 export type OnboardingUserPreferenceInput = {
+  /**
+   * Whitelist of event keys to deliver. An empty list means all events are delivered.
+   * e.g. [\"APPOINTMENT_CREATED\", \"APPOINTMENT_PAID\"]
+   */
+  notificationEnabledList?: InputMaybe<Array<Scalars['String']['input']>>;
   /** Notification method: EMAIL or SMS */
   notificationMethod: Scalars['String']['input'];
   notificationsEnabled: Scalars['Boolean']['input'];
@@ -1066,24 +1014,18 @@ export type Query = {
   servicePage?: Maybe<ServicePage>;
   /** Fetch a service page by its service ID */
   servicePageByService?: Maybe<ServicePage>;
-  /** Fetch a single service tag by ID */
-  serviceTag?: Maybe<ServiceTag>;
-  /** List service tags by service ID */
-  serviceTagsByService: Array<ServiceTag>;
-  /** List service tags by tag ID */
-  serviceTagsByTag: Array<ServiceTag>;
   /** List services with relay-style cursor pagination */
   services: ServiceConnection;
-  /** Fetch a single tag by ID */
-  tag?: Maybe<Tag>;
-  /** List tags with relay-style cursor pagination */
-  tags: TagConnection;
   /** Fetch a single todo by ID */
   todo?: Maybe<Todo>;
   /** List todos with relay-style cursor pagination */
   todos: TodoConnection;
   /** Fetch a single user by ID */
   user?: Maybe<User>;
+  /** Fetch a single user preference by ID */
+  userPreference?: Maybe<UserPreference>;
+  /** List user preferences with relay-style cursor pagination */
+  userPreferences: UserPreferenceConnection;
   /** List users with relay-style cursor pagination */
   users: UserConnection;
 };
@@ -1276,41 +1218,12 @@ export type QueryServicePageByServiceArgs = {
 };
 
 
-export type QueryServiceTagArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QueryServiceTagsByServiceArgs = {
-  serviceId: Scalars['ID']['input'];
-};
-
-
-export type QueryServiceTagsByTagArgs = {
-  tagId: Scalars['ID']['input'];
-};
-
-
 export type QueryServicesArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<ServiceFilter>;
   first: Scalars['Int']['input'];
   search?: InputMaybe<Scalars['String']['input']>;
   sort?: InputMaybe<ServiceSort>;
-};
-
-
-export type QueryTagArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QueryTagsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  filter?: InputMaybe<TagFilter>;
-  first: Scalars['Int']['input'];
-  search?: InputMaybe<Scalars['String']['input']>;
-  sort?: InputMaybe<TagSort>;
 };
 
 
@@ -1333,6 +1246,19 @@ export type QueryUserArgs = {
 };
 
 
+export type QueryUserPreferenceArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryUserPreferencesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<UserPreferenceFilter>;
+  first: Scalars['Int']['input'];
+  sort?: InputMaybe<UserPreferenceSort>;
+};
+
+
 export type QueryUsersArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<UserFilter>;
@@ -1344,15 +1270,6 @@ export type QueryUsersArgs = {
 export type RejectServiceAppointmentPayload = {
   __typename?: 'RejectServiceAppointmentPayload';
   serviceAppointment: ServiceAppointment;
-};
-
-export type RemoveServiceTagInput = {
-  id: Scalars['ID']['input'];
-};
-
-export type RemoveServiceTagPayload = {
-  __typename?: 'RemoveServiceTagPayload';
-  success: Scalars['Boolean']['output'];
 };
 
 export type RequestSalesInvoiceInput = {
@@ -1460,7 +1377,7 @@ export type Service = Node & {
   /** Landing page for this service */
   servicePage?: Maybe<ServicePage>;
   /** Tags associated with this service */
-  tags: Array<Tag>;
+  tags: Array<Scalars['String']['output']>;
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
 };
@@ -1789,87 +1706,12 @@ export enum ServiceSortField {
   NameDesc = 'NAME_DESC'
 }
 
-/** Association between a service and a tag. */
-export type ServiceTag = Node & {
-  __typename?: 'ServiceTag';
-  /** When the record was created */
-  createdAt: Scalars['DateTime']['output'];
-  /** ID of the user who created this record */
-  createdBy: Scalars['ID']['output'];
-  /** Globally unique identifier */
-  id: Scalars['ID']['output'];
-  /** The associated service */
-  service?: Maybe<Service>;
-  /** ID of the associated service */
-  serviceId: Scalars['ID']['output'];
-  /** The associated tag */
-  tag?: Maybe<Tag>;
-  /** ID of the associated tag */
-  tagId: Scalars['ID']['output'];
-  /** When the record was last updated */
-  updatedAt: Scalars['DateTime']['output'];
-};
-
-export type ServiceTagConnection = {
-  __typename?: 'ServiceTagConnection';
-  edges: Array<ServiceTagEdge>;
-  pageInfo: PageInfo;
-};
-
-export type ServiceTagEdge = {
-  __typename?: 'ServiceTagEdge';
-  cursor: Scalars['String']['output'];
-  node: ServiceTag;
-};
-
 /** Sort order for query results. */
 export enum SortOrder {
   /** Ascending order */
   Asc = 'ASC',
   /** Descending order */
   Desc = 'DESC'
-}
-
-/** A tag that can be associated with services. */
-export type Tag = Node & {
-  __typename?: 'Tag';
-  /** When the record was created */
-  createdAt: Scalars['DateTime']['output'];
-  /** Tag description */
-  description?: Maybe<Scalars['String']['output']>;
-  /** Globally unique identifier */
-  id: Scalars['ID']['output'];
-  /** Tag name */
-  name: Scalars['String']['output'];
-  /** When the record was last updated */
-  updatedAt: Scalars['DateTime']['output'];
-};
-
-export type TagConnection = {
-  __typename?: 'TagConnection';
-  edges: Array<TagEdge>;
-  pageInfo: PageInfo;
-};
-
-export type TagEdge = {
-  __typename?: 'TagEdge';
-  cursor: Scalars['String']['output'];
-  node: Tag;
-};
-
-export type TagFilter = {
-  name?: InputMaybe<Scalars['String']['input']>;
-};
-
-export type TagSort = {
-  field: TagSortField;
-};
-
-export enum TagSortField {
-  CreatedAt = 'CREATED_AT',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  Name = 'NAME',
-  NameDesc = 'NAME_DESC'
 }
 
 /** A todo item in the system. */
@@ -2003,22 +1845,12 @@ export type UpdateServiceInput = {
   maxPrice?: InputMaybe<Scalars['Float']['input']>;
   minPrice?: InputMaybe<Scalars['Float']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
 export type UpdateServicePayload = {
   __typename?: 'UpdateServicePayload';
   service: Service;
-};
-
-export type UpdateTagInput = {
-  description?: InputMaybe<Scalars['String']['input']>;
-  id: Scalars['ID']['input'];
-  name?: InputMaybe<Scalars['String']['input']>;
-};
-
-export type UpdateTagPayload = {
-  __typename?: 'UpdateTagPayload';
-  tag: Tag;
 };
 
 export type UpdateTodoInput = {
@@ -2049,6 +1881,24 @@ export type UpdateUserInput = {
 export type UpdateUserPayload = {
   __typename?: 'UpdateUserPayload';
   user: User;
+};
+
+/** Input for updating the authenticated user's notification preferences */
+export type UpdateUserPreferenceInput = {
+  /**
+   * Whitelist of event keys to deliver. An empty list means all events are delivered.
+   * e.g. [\"APPOINTMENT_CREATED\", \"APPOINTMENT_PAID\"]
+   */
+  notificationEnabledList?: InputMaybe<Array<Scalars['String']['input']>>;
+  /** Notification method: EMAIL or SMS */
+  notificationMethod?: InputMaybe<Scalars['String']['input']>;
+  /** Whether notifications are enabled */
+  notificationsEnabled?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+export type UpdateUserPreferencePayload = {
+  __typename?: 'UpdateUserPreferencePayload';
+  userPreference: UserPreference;
 };
 
 export type UpsertServiceFormInput = {
@@ -2111,6 +1961,8 @@ export type User = Node & {
   suffix?: Maybe<Scalars['String']['output']>;
   /** When the record was last updated */
   updatedAt: Scalars['DateTime']['output'];
+  /** User's notification preferences */
+  userPreference?: Maybe<UserPreference>;
 };
 
 
@@ -2192,6 +2044,11 @@ export type UserPreference = Node & {
   createdBy: Scalars['ID']['output'];
   /** Globally unique identifier */
   id: Scalars['ID']['output'];
+  /**
+   * Whitelist of event keys to deliver (e.g. [\"APPOINTMENT_CREATED\", \"APPOINTMENT_PAID\"]).
+   * An empty list means all events are delivered.
+   */
+  notificationEnabledList: Array<Scalars['String']['output']>;
   /** Notification method: EMAIL or SMS */
   notificationMethod: Scalars['String']['output'];
   /** Whether notifications are enabled */
@@ -2201,6 +2058,32 @@ export type UserPreference = Node & {
   /** ID of the user who owns this preference */
   userId: Scalars['ID']['output'];
 };
+
+export type UserPreferenceConnection = {
+  __typename?: 'UserPreferenceConnection';
+  edges: Array<UserPreferenceEdge>;
+  pageInfo: PageInfo;
+};
+
+export type UserPreferenceEdge = {
+  __typename?: 'UserPreferenceEdge';
+  cursor: Scalars['String']['output'];
+  node: UserPreference;
+};
+
+export type UserPreferenceFilter = {
+  /** Filter by owning user ID */
+  userId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+export type UserPreferenceSort = {
+  field: UserPreferenceSortField;
+};
+
+export enum UserPreferenceSortField {
+  CreatedAt = 'CREATED_AT',
+  CreatedAtDesc = 'CREATED_AT_DESC'
+}
 
 export type UserSort = {
   field: UserSortField;
