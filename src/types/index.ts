@@ -29,6 +29,8 @@ export interface User {
   lastName: string;
   middleName?: string;
   suffix?: string;
+  mobileNumber?: string;
+  isBusinessOwner?: boolean;
   profilePictureUrl?: string;
   createdAt?: string;
   updatedAt?: string;

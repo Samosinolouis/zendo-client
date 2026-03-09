@@ -24,6 +24,8 @@ interface AuthUser {
   lastName: string;
   middleName?: string;
   suffix?: string;
+  mobileNumber?: string;
+  isBusinessOwner?: boolean;
   email: string;
   profilePictureUrl?: string;
   bannerImageUrl?: string;
@@ -102,6 +104,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
             lastName: fetched.lastName ?? "",
             middleName: fetched.middleName ?? undefined,
             suffix: fetched.suffix ?? undefined,
+            mobileNumber: fetched.mobileNumber ?? undefined,
+            isBusinessOwner: fetched.isBusinessOwner ?? undefined,
             email: prev?.email ?? "",
             profilePictureUrl: fetched.profilePictureUrl ?? undefined,
             bannerImageUrl: fetched.bannerImageUrl ?? undefined,
@@ -112,6 +116,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
             lastName: fetched.lastName ?? prev.lastName,
             middleName: fetched.middleName ?? prev.middleName,
             suffix: fetched.suffix ?? prev.suffix,
+            mobileNumber: fetched.mobileNumber ?? prev.mobileNumber,
+            isBusinessOwner: fetched.isBusinessOwner ?? prev.isBusinessOwner,
             profilePictureUrl: fetched.profilePictureUrl ?? prev.profilePictureUrl,
             bannerImageUrl: fetched.bannerImageUrl ?? prev.bannerImageUrl,
           };
@@ -169,7 +175,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
   }, [status, appUser?.id, user?.id, fetchBusinesses]);
 
   const isLoggedIn = status === "authenticated" && user !== null;
-  const isOwner = true;
+  const isOwner = user?.isBusinessOwner === true;
 
   const login = useCallback(() => {
     signIn("keycloak", { callbackUrl: "/onboarding" });

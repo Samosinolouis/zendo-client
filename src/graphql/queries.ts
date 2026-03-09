@@ -13,6 +13,8 @@ export const GET_USER = /* GraphQL */ `
       middleName
       lastName
       suffix
+      mobileNumber
+      isBusinessOwner
       profilePictureUrl
       bannerImageUrl
       createdAt

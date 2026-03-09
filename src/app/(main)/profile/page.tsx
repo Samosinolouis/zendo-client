@@ -13,7 +13,7 @@ import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import {
   User, Mail, CreditCard, FileText, MapPin, Download,
   Sparkles, Shield, ArrowRight, Star, CalendarDays, TrendingUp,
-  Camera, Loader2, Check, X, Pencil,
+  Camera, Loader2, Check, X, Pencil, Phone,
 } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -32,7 +33,7 @@ export default function ProfilePage() {
   const email = session?.user?.email ?? "";
 
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ firstName: "", lastName: "", middleName: "", suffix: "" });
+  const [editForm, setEditForm] = useState({ firstName: "", lastName: "", middleName: "", suffix: "", mobileCountryCode: "+63", mobileLocalNumber: "" });
   const [uploading, setUploading] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,22 +87,30 @@ export default function ProfilePage() {
   }
 
   const handleStartEdit = () => {
+    const existing = user.mobileNumber ?? "";
+    // Parse existing "+63 9380542839" → code="+63", local="9380542839"
+    const match = existing.match(/^(\+\d+)\s(.+)$/);
     setEditForm({
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       middleName: user.middleName || "",
       suffix: user.suffix || "",
+      mobileCountryCode: match ? match[1] : "+63",
+      mobileLocalNumber: match ? match[2] : existing.replace(/^\+\d+\s?/, ""),
     });
     setEditing(true);
   };
 
   const handleSaveEdit = async () => {
-    const input: Record<string, string> = {
+    const input: Record<string, unknown> = {
       firstName: editForm.firstName.trim(),
       lastName: editForm.lastName.trim(),
     };
     if (editForm.middleName.trim()) input.middleName = editForm.middleName.trim();
     if (editForm.suffix.trim()) input.suffix = editForm.suffix.trim();
+    input.mobileNumber = editForm.mobileLocalNumber.trim()
+      ? `${editForm.mobileCountryCode} ${editForm.mobileLocalNumber.trim()}`
+      : null;
 
     await updateUser({ id: user.id, input });
     setEditing(false);
@@ -268,6 +277,40 @@ export default function ProfilePage() {
                       <Input value={editForm.suffix} onChange={(e) => setEditForm(f => ({ ...f, suffix: e.target.value }))} />
                     </div>
                   </div>
+                  <div className="space-y-1.5">
+                    <Label>Mobile number</Label>
+                    <div className="flex gap-2">
+                      <Select value={editForm.mobileCountryCode} onValueChange={(v) => setEditForm(f => ({ ...f, mobileCountryCode: v }))}>
+                        <SelectTrigger className="w-28 shrink-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="+63">🇵🇭 +63</SelectItem>
+                          <SelectItem value="+1">🇺🇸 +1</SelectItem>
+                          <SelectItem value="+44">🇬🇧 +44</SelectItem>
+                          <SelectItem value="+61">🇦🇺 +61</SelectItem>
+                          <SelectItem value="+81">🇯🇵 +81</SelectItem>
+                          <SelectItem value="+82">🇰🇷 +82</SelectItem>
+                          <SelectItem value="+86">🇨🇳 +86</SelectItem>
+                          <SelectItem value="+65">🇸🇬 +65</SelectItem>
+                          <SelectItem value="+60">🇲🇾 +60</SelectItem>
+                          <SelectItem value="+66">🇹🇭 +66</SelectItem>
+                          <SelectItem value="+62">🇮🇩 +62</SelectItem>
+                          <SelectItem value="+84">🇻🇳 +84</SelectItem>
+                          <SelectItem value="+91">🇮🇳 +91</SelectItem>
+                          <SelectItem value="+49">🇩🇪 +49</SelectItem>
+                          <SelectItem value="+33">🇫🇷 +33</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={editForm.mobileLocalNumber}
+                        onChange={(e) => setEditForm(f => ({ ...f, mobileLocalNumber: e.target.value }))}
+                        placeholder="9380542839"
+                        type="tel"
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={saving}>
                       <X className="w-3.5 h-3.5 mr-1" /> Cancel
@@ -300,6 +343,15 @@ export default function ProfilePage() {
                       <p className="text-sm font-semibold text-foreground">{isOwner ? "Business Owner" : "Customer"}</p>
                     </div>
                   </div>
+                  {user.mobileNumber && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mobile Number</p>
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Phone className="w-4 h-4 text-primary shrink-0" />
+                        {user.mobileNumber}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

@@ -840,9 +840,14 @@ export type OnboardingBusinessInput = {
 
 /** Input for the user profile during onboarding */
 export type OnboardingUserInput = {
+  bannerImageUrl?: InputMaybe<Scalars['String']['input']>;
   firstName: Scalars['String']['input'];
+  /** Whether this user is a business owner */
+  isBusinessOwner?: InputMaybe<Scalars['Boolean']['input']>;
   lastName: Scalars['String']['input'];
   middleName?: InputMaybe<Scalars['String']['input']>;
+  /** Mobile number in format +<countryCode> <number> (e.g. +63 9380542839) */
+  mobileNumber?: InputMaybe<Scalars['String']['input']>;
   profilePictureUrl?: InputMaybe<Scalars['String']['input']>;
   suffix?: InputMaybe<Scalars['String']['input']>;
 };
@@ -2129,8 +2134,10 @@ export type UpdateTodoPayload = {
 export type UpdateUserInput = {
   bannerImageUrl?: InputMaybe<Scalars['String']['input']>;
   firstName?: InputMaybe<Scalars['String']['input']>;
+  isBusinessOwner?: InputMaybe<Scalars['Boolean']['input']>;
   lastName?: InputMaybe<Scalars['String']['input']>;
   middleName?: InputMaybe<Scalars['String']['input']>;
+  mobileNumber?: InputMaybe<Scalars['String']['input']>;
   profilePictureUrl?: InputMaybe<Scalars['String']['input']>;
   suffix?: InputMaybe<Scalars['String']['input']>;
 };
@@ -2180,10 +2187,14 @@ export type User = Node & {
   firstName: Scalars['String']['output'];
   /** Globally unique identifier */
   id: Scalars['ID']['output'];
+  /** Whether this user is a business owner */
+  isBusinessOwner: Scalars['Boolean']['output'];
   /** User's last name */
   lastName: Scalars['String']['output'];
   /** User's middle name */
   middleName?: Maybe<Scalars['String']['output']>;
+  /** Mobile number in format +<countryCode> <number> (e.g. +63 9380542839) */
+  mobileNumber?: Maybe<Scalars['String']['output']>;
   /** Notifications for this user */
   notifications?: Maybe<NotificationConnection>;
   /** Payments made by this user */

@@ -14,6 +14,8 @@ export const UPDATE_USER = /* GraphQL */ `
         middleName
         lastName
         suffix
+        mobileNumber
+        isBusinessOwner
         profilePictureUrl
         bannerImageUrl
         createdAt
@@ -56,6 +58,8 @@ export const PROCESS_ONBOARDING = /* GraphQL */ `
         middleName
         lastName
         suffix
+        mobileNumber
+        isBusinessOwner
         profilePictureUrl
         createdAt
         updatedAt

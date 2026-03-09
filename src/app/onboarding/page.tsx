@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useRef } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
@@ -12,14 +13,17 @@ import type {
   User as GqlUser, BillingAddress, Business, BillingAddressConnection, BusinessConnection,
 } from "@/graphql/types";
 import {
-  ArrowRight, ArrowLeft, User, MapPin, Building2, Check, Sparkles, Loader2,
+  ArrowRight, ArrowLeft, User, MapPin, Building2, Check, Sparkles, Loader2, Camera,
 } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ImageUpload } from "@/components/ui/image-upload";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -32,7 +36,10 @@ interface ProfileForm {
   middleName: string;
   lastName: string;
   suffix: string;
+  mobileCountryCode: string;
+  mobileLocalNumber: string;
   profilePictureUrl: string;
+  bannerImageUrl: string;
 }
 
 interface BillingForm {
@@ -71,13 +78,20 @@ function OnboardingContent() {
   const [wantsBusiness, setWantsBusiness] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [profilePicUploading, setProfilePicUploading] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const profilePicRef = useRef<HTMLInputElement>(null);
+  const bannerRef = useRef<HTMLInputElement>(null);
 
   const [profile, setProfile] = useState<ProfileForm>({
     firstName: "",
     middleName: "",
     lastName: "",
     suffix: "",
+    mobileCountryCode: "+63",
+    mobileLocalNumber: "",
     profilePictureUrl: "",
+    bannerImageUrl: "",
   });
 
   const [billing, setBilling] = useState<BillingForm>({
@@ -138,6 +152,34 @@ function OnboardingContent() {
     if (status === "authenticated") checkOnboardingStatus();
   }, [status, checkOnboardingStatus, router]);
 
+  const handleProfilePicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProfilePicUploading(true);
+    try {
+      const result = await uploadToCloudinary(file, "profile-pictures");
+      updateProfile("profilePictureUrl", result.secure_url);
+    } catch (err) {
+      console.error("Profile picture upload failed:", err);
+    } finally {
+      setProfilePicUploading(false);
+    }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBannerUploading(true);
+    try {
+      const result = await uploadToCloudinary(file, "profile-banners");
+      updateProfile("bannerImageUrl", result.secure_url);
+    } catch (err) {
+      console.error("Banner upload failed:", err);
+    } finally {
+      setBannerUploading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setError(""); setLoading(true); setStep("submitting");
     const input: Record<string, unknown> = {
@@ -146,8 +188,13 @@ function OnboardingContent() {
         lastName: profile.lastName.trim(),
         ...(profile.middleName.trim() && { middleName: profile.middleName.trim() }),
         ...(profile.suffix.trim() && { suffix: profile.suffix.trim() }),
+        ...(profile.mobileLocalNumber.trim() && { mobileNumber: `${profile.mobileCountryCode} ${profile.mobileLocalNumber.trim()}` }),
+        isBusinessOwner: wantsBusiness,
         ...(profile.profilePictureUrl.trim() && {
           profilePictureUrl: profile.profilePictureUrl.trim(),
+        }),
+        ...(profile.bannerImageUrl.trim() && {
+          bannerImageUrl: profile.bannerImageUrl.trim(),
         }),
       },
       billingAddress: {
@@ -350,15 +397,80 @@ function OnboardingContent() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Profile picture</Label>
-                  <ImageUpload
-                    value={profile.profilePictureUrl}
-                    onChange={(url) => updateProfile("profilePictureUrl", url)}
-                    onRemove={() => updateProfile("profilePictureUrl", "")}
-                    aspect="square"
-                    folder="users"
-                    label="Upload your profile picture"
-                  />
+                  <Label htmlFor="mobileNumber">Mobile number</Label>
+                  <div className="flex gap-2">
+                    <Select value={profile.mobileCountryCode} onValueChange={(v) => updateProfile("mobileCountryCode", v)}>
+                      <SelectTrigger className="w-28 shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="+63">🇵🇭 +63</SelectItem>
+                        <SelectItem value="+1">🇺🇸 +1</SelectItem>
+                        <SelectItem value="+44">🇬🇧 +44</SelectItem>
+                        <SelectItem value="+61">🇦🇺 +61</SelectItem>
+                        <SelectItem value="+81">🇯🇵 +81</SelectItem>
+                        <SelectItem value="+82">🇰🇷 +82</SelectItem>
+                        <SelectItem value="+86">🇨🇳 +86</SelectItem>
+                        <SelectItem value="+65">🇸🇬 +65</SelectItem>
+                        <SelectItem value="+60">🇲🇾 +60</SelectItem>
+                        <SelectItem value="+66">🇹🇭 +66</SelectItem>
+                        <SelectItem value="+62">🇮🇩 +62</SelectItem>
+                        <SelectItem value="+84">🇻🇳 +84</SelectItem>
+                        <SelectItem value="+91">🇮🇳 +91</SelectItem>
+                        <SelectItem value="+49">🇩🇪 +49</SelectItem>
+                        <SelectItem value="+33">🇫🇷 +33</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      id="mobileNumber"
+                      value={profile.mobileLocalNumber}
+                      onChange={(e) => updateProfile("mobileLocalNumber", e.target.value)}
+                      placeholder="9380542839"
+                      type="tel"
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Profile picture <span className="text-muted-foreground font-normal text-xs">& banner</span></Label>
+                  <div className="relative pb-10">
+                    {/* Banner */}
+                    <button
+                      type="button"
+                      className="relative rounded-xl overflow-hidden h-28 bg-hero group cursor-pointer w-full"
+                      onClick={() => bannerRef.current?.click()}
+                    >
+                      {profile.bannerImageUrl ? (
+                        <Image src={profile.bannerImageUrl} alt="Banner" fill className="object-cover object-center" />
+                      ) : (
+                        <>
+                          <div className="absolute top-0 right-0 w-56 h-56 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+                          <div className="absolute bottom-0 left-10 w-40 h-40 bg-primary/15 rounded-full blur-3xl pointer-events-none" />
+                        </>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        {bannerUploading ? <Loader2 className="w-6 h-6 text-white animate-spin" /> : <Camera className="w-6 h-6 text-white" />}
+                      </div>
+                      <input ref={bannerRef} type="file" accept="image/*" className="hidden" onChange={handleBannerUpload} />
+                    </button>
+                    {/* Profile picture overlapping the banner */}
+                    <button
+                      type="button"
+                      className="absolute bottom-0 left-4 group cursor-pointer"
+                      onClick={() => profilePicRef.current?.click()}
+                    >
+                      <Avatar className="w-20 h-20 rounded-2xl border-4 border-background shadow-xl">
+                        <AvatarImage src={profile.profilePictureUrl || undefined} alt="Profile picture" />
+                        <AvatarFallback className="text-xl font-extrabold bg-linear-to-br from-primary to-primary/80 text-white rounded-2xl">
+                          {profile.firstName ? profile.firstName[0].toUpperCase() : <User className="w-6 h-6" />}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        {profilePicUploading ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Camera className="w-5 h-5 text-white" />}
+                      </div>
+                      <input ref={profilePicRef} type="file" accept="image/*" className="hidden" onChange={handleProfilePicUpload} />
+                    </button>
+                  </div>
                 </div>
                 <Button disabled={!canProceedProfile} onClick={() => setStep("billing")} className="w-full mt-2" size="lg">
                   Continue <ArrowRight className="w-4 h-4 ml-2" />
