@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/providers/AuthProvider";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
 import { GET_BILLING_ADDRESSES, GET_USER } from "@/graphql/queries";
 import { UPDATE_EMAIL, UPDATE_PASSWORD, UPDATE_BILLING_ADDRESS, UPDATE_USER_PREFERENCE } from "@/graphql/mutations";
@@ -84,10 +84,11 @@ export default function SettingsPage() {
       input: { currentPassword, newPassword },
     });
     if (res?.updatePassword?.success) {
-      setPwdMsg("Password updated successfully.");
+      setPwdMsg("Password updated. Signing you out…");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setTimeout(() => signOut({ callbackUrl: "/" }), 1500);
     } else {
       setPwdMsg("Failed to update password. Check your current password.");
     }
