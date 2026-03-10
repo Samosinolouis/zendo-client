@@ -1,11 +1,12 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/providers/ToastProvider";
-import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
+import { useQuery, useInfiniteQuery, useMutation, extractNodes } from "@/graphql/hooks";
+import { InfiniteScrollTrigger } from "@/components/ui/infinite-scroll";
 import { GET_SERVICE_APPOINTMENTS, GET_SERVICES, GET_BUSINESSES } from "@/graphql/queries";
 import {
   COMPLETE_SERVICE_APPOINTMENT,
@@ -672,12 +673,21 @@ function AppointmentActions({
 export default function AppointmentsPage() {
   const { user, isLoggedIn } = useAuth();
 
-  const { data: aptData, loading: aptLoading, refetch } = useQuery<{ serviceAppointments: Connection<ServiceAppointment> }>(
+  const {
+    nodes: appointments,
+    loading: aptLoading,
+    loadingMore: aptLoadingMore,
+    hasNextPage: aptHasMore,
+    loadMore: aptLoadMore,
+    refetch,
+  } = useInfiniteQuery<ServiceAppointment, { serviceAppointments: Connection<ServiceAppointment> }>(
     GET_SERVICE_APPOINTMENTS,
-    { first: 100, filter: { userId: user?.id } },
+    { first: 20, filter: { userId: user?.id } },
+    (data) => data.serviceAppointments,
     { skip: !user }
   );
-  const appointments = extractNodes(aptData?.serviceAppointments);
+
+  const handleLoadMore = useCallback(() => aptLoadMore(), [aptLoadMore]);
 
   const { data: svcData, loading: svcLoading } = useQuery<{ services: Connection<Service> }>(
     GET_SERVICES, { first: 200 }, { skip: !user }
@@ -743,6 +753,7 @@ export default function AppointmentsPage() {
     { label: "Pending",   value: appointments.filter((a) => { const s = aptStatus(a); return s === "pending" || s === "paid"; }).length,    icon: Hourglass,     bg: "bg-amber-50",   text: "text-amber-600"  },
     { label: "Cancelled", value: appointments.filter((a) => { const s = aptStatus(a); return s === "cancelled" || s === "rejected"; }).length, icon: XCircle,    bg: "bg-red-50",     text: "text-red-600"    },
   ];
+  const totalLabel = aptHasMore ? `${appointments.length}+` : String(appointments.length);
 
   return (
     <div className="min-h-screen bg-background">
@@ -791,7 +802,7 @@ export default function AppointmentsPage() {
                   <s.icon className={`w-5 h-5 ${s.text}`} />
                 </div>
                 <div>
-                  <p className="text-2xl font-extrabold text-foreground leading-none">{s.value}</p>
+                  <p className="text-2xl font-extrabold text-foreground leading-none">{s.label === "Total" ? totalLabel : s.value}</p>
                   <p className={`text-xs font-medium ${s.text} mt-0.5`}>{s.label}</p>
                 </div>
               </CardContent>
@@ -914,7 +925,7 @@ export default function AppointmentsPage() {
             <Badge variant="secondary">{past.length}</Badge>
           </div>
 
-          {past.length === 0 ? (
+          {past.length === 0 && !aptHasMore ? (
             <p className="text-muted-foreground text-sm">No past appointments yet.</p>
           ) : (
             <div className="space-y-2">
@@ -961,12 +972,21 @@ export default function AppointmentsPage() {
                   </Card>
                 );
               })}
+              {/* Skeleton loading more past appointments */}
+              {aptLoadingMore && (
+                <>
+                  {[0, 1, 2].map((n) => (
+                    <Skeleton key={n} className="h-16 rounded-xl" />
+                  ))}
+                </>
+              )}
+              <InfiniteScrollTrigger onVisible={handleLoadMore} disabled={!aptHasMore || aptLoadingMore} />
             </div>
           )}
         </section>
 
         {/* Bottom CTA if empty */}
-        {appointments.length === 0 && (
+        {appointments.length === 0 && !aptLoading && (
           <div className="mt-10 rounded-3xl overflow-hidden relative bg-hero p-10 text-center animate-fade-in">
             <div className="absolute inset-0 bg-linear-to-br from-primary/80 to-primary/90" />
             <div className="relative">

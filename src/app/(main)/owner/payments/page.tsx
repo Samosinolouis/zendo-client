@@ -11,7 +11,8 @@
 
 import { useState, useMemo, useRef, useCallback } from "react";
 import { useAuth } from "@/providers/AuthProvider";
-import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
+import { useQuery, useMutation, extractNodes, useInfiniteQuery } from "@/graphql/hooks";
+import { InfiniteScrollTrigger } from "@/components/ui/infinite-scroll";
 import { GET_PAYMENTS, GET_SALES_INVOICES } from "@/graphql/queries";
 import { RESOLVE_SALES_INVOICE } from "@/graphql/mutations";
 import type { Payment, SalesInvoice, Connection } from "@/types";
@@ -351,13 +352,19 @@ export default function OwnerPayments() {
 
   const bizId = selectedBizId || businesses[0]?.id;
 
-  const { data, loading } = useQuery<{ payments: Connection<Payment> }>(
+  const {
+    nodes: payments,
+    loading,
+    loadingMore: pmtLoadingMore,
+    hasNextPage: pmtHasMore,
+    loadMore: pmtLoadMore,
+  } = useInfiniteQuery<Payment, { payments: Connection<Payment> }>(
     GET_PAYMENTS,
-    { first: 50, filter: { businessId: bizId }, sort: { field: "PAID_AT_DESC" } },
+    { first: 30, filter: { businessId: bizId }, sort: { field: "PAID_AT_DESC" } },
+    (data) => data.payments,
     { skip: !bizId },
   );
-
-  const payments = useMemo(() => extractNodes(data?.payments), [data]);
+  const handlePmtLoadMore = useCallback(() => pmtLoadMore(), [pmtLoadMore]);
 
   if (!user) return null;
 
@@ -465,6 +472,13 @@ export default function OwnerPayments() {
                 </TableCell>
               </TableRow>
             ))}
+            {pmtLoadingMore && [0, 1, 2].map((n) => (
+              <TableRow key={`pmt-skel-${n}`}>
+                {[0, 1, 2, 3, 4, 5].map((c) => (
+                  <TableCell key={c}><Skeleton className="h-4 w-full" /></TableCell>
+                ))}
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>
@@ -500,6 +514,9 @@ export default function OwnerPayments() {
       )}
 
       {renderContent()}
+      {!loading && payments.length > 0 && (
+        <InfiniteScrollTrigger onVisible={handlePmtLoadMore} disabled={!pmtHasMore || pmtLoadingMore} />
+      )}
 
       <InvoicesSheet
         payment={selectedPayment}

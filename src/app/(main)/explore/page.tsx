@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { useQuery, extractNodes } from "@/graphql/hooks";
+import { useQuery, useInfiniteQuery, extractNodes } from "@/graphql/hooks";
 import { GET_BUSINESSES, GET_SERVICES } from "@/graphql/queries";
 import type { Business, Service, Connection } from "@/types";
 import {
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { InfiniteScrollTrigger } from "@/components/ui/infinite-scroll";
 
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,11 +41,20 @@ export default function ExplorePage() {
   );
   const businesses = extractNodes(bizData?.businesses);
 
-  // Fetch services
-  const { data: svcData, loading: svcLoading } = useQuery<{ services: Connection<Service> }>(
-    GET_SERVICES, { first: 50, search: debouncedSearch || undefined }
+  // Fetch services with infinite scroll
+  const {
+    nodes: allServices,
+    loading: svcLoading,
+    loadingMore: svcLoadingMore,
+    hasNextPage: svcHasMore,
+    loadMore: svcLoadMore,
+  } = useInfiniteQuery<Service, { services: Connection<Service> }>(
+    GET_SERVICES,
+    { first: 18, search: debouncedSearch || undefined },
+    (data) => data.services,
   );
-  const allServices = useMemo(() => extractNodes(svcData?.services), [svcData]);
+
+  const handleLoadMore = useCallback(() => svcLoadMore(), [svcLoadMore]);
 
   // Derive unique tags from loaded services
   const allTags = useMemo(() => {
@@ -213,7 +223,7 @@ className="relative bg-hero min-h-110 flex flex-col items-center justify-center 
               {debouncedSearch ? `Results for "${debouncedSearch}"` : "All Services"}
             </h2>
             <Badge variant="secondary" className="bg-primary/10 text-primary">
-              {services.length}
+              {services.length}{svcHasMore ? "+" : ""}
             </Badge>
           </div>
         </div>
@@ -247,57 +257,58 @@ className="relative bg-hero min-h-110 flex flex-col items-center justify-center 
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {services.map((service, i) => {
-              const bizName = getBusinessName(service.businessId);
-              return (
-                <Link
-                  key={service.id}
-                  href={`/service/${service.id}`}
-                  style={{ animationDelay: `${i * 0.06}s` }}
-                  className="group animate-scale-in block"
-                >
-                  <Card className="overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 border-border">
-                    <div className="relative h-44 bg-muted overflow-hidden">
-                      {service.bannerImageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={service.bannerImageUrl} alt={service.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                      )}
-                      <div className="absolute inset-0 bg-linear-to-t from-black/30 to-transparent" />
-                      <Badge className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-primary border-0">
-                        {bizName}
-                      </Badge>
-                    </div>
-                    <CardContent className="p-5">
-                      <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors leading-tight">
-                        {service.name}
-                      </h3>
-                      <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-                        {service.description}
-                      </p>
-                      {(service.tags ?? []).length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {(service.tags ?? []).slice(0, 3).map((tag) => (
-                            <Badge
-                              key={tag}
-                              variant="secondary"
-                              className="text-xs py-0 px-1.5 cursor-pointer"
-                              onClick={(e) => { e.preventDefault(); setSelectedTag(tag); }}
-                            >
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-5 h-5 rounded-full bg-linear-to-br from-primary to-primary/80 flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">Z</span>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {services.map((service, i) => {
+                const bizName = getBusinessName(service.businessId);
+                return (
+                  <Link
+                    key={service.id}
+                    href={`/service/${service.id}`}
+                    style={{ animationDelay: `${i * 0.06}s` }}
+                    className="group animate-scale-in block"
+                  >
+                    <Card className="overflow-hidden hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 border-border">
+                      <div className="relative h-44 bg-muted overflow-hidden">
+                        {service.bannerImageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={service.bannerImageUrl} alt={service.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        )}
+                        <div className="absolute inset-0 bg-linear-to-t from-black/30 to-transparent" />
+                        <Badge className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-primary border-0">
+                          {bizName}
+                        </Badge>
+                      </div>
+                      <CardContent className="p-5">
+                        <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors leading-tight">
+                          {service.name}
+                        </h3>
+                        <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                          {service.description}
+                        </p>
+                        {(service.tags ?? []).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {(service.tags ?? []).slice(0, 3).map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="secondary"
+                                className="text-xs py-0 px-1.5 cursor-pointer"
+                                onClick={(e) => { e.preventDefault(); setSelectedTag(tag); }}
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
                           </div>
-                          <span className="text-xs text-muted-foreground">Verified</span>
-                        </div>
-                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary group-hover:gap-2 transition-all">
-                          Book Now <ArrowRight className="w-4 h-4" />
+                        )}
+                        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-full bg-linear-to-br from-primary to-primary/80 flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">Z</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">Verified</span>
+                          </div>
+                          <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary group-hover:gap-2 transition-all">
+                            Book Now <ArrowRight className="w-4 h-4" />
                         </span>
                       </div>
                     </CardContent>
@@ -306,6 +317,25 @@ className="relative bg-hero min-h-110 flex flex-col items-center justify-center 
               );
             })}
           </div>
+
+            {/* Infinite scroll: skeleton while loading more pages */}
+            {svcLoadingMore && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Card key={i} className="overflow-hidden py-0 gap-0">
+                    <Skeleton className="h-44 w-full rounded-b-none" />
+                    <CardContent className="p-5 space-y-3">
+                      <Skeleton className="h-5 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-1/2" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            <InfiniteScrollTrigger onVisible={handleLoadMore} disabled={!svcHasMore || svcLoadingMore} />
+          </>
         )}
       </div>
     </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useAuth } from "@/providers/AuthProvider";
-import { useQuery, extractNodes } from "@/graphql/hooks";
+import { useQuery, useInfiniteQuery, extractNodes } from "@/graphql/hooks";
+import { InfiniteScrollTrigger } from "@/components/ui/infinite-scroll";
 import { GET_SERVICES, GET_SERVICE_FEEDBACKS, GET_USER } from "@/graphql/queries";
 import type { PageNode } from "@/graphql/page-nodes";
 import type { Service, ServiceFeedback, User, Connection } from "@/types";
@@ -60,15 +61,25 @@ export default function OwnerFeedbacksPage() {
   const serviceIds = useMemo(() => ownerServices.map((s) => s.id), [ownerServices]);
 
   // Fetch feedbacks
-  const { data: fbData, loading: fbLoading } = useQuery<{ serviceFeedbacks: Connection<ServiceFeedback> }>(
-    GET_SERVICE_FEEDBACKS, { first: 200 }, { skip: serviceIds.length === 0 }
+  const {
+    nodes: fbNodes,
+    loading: fbLoading,
+    loadingMore: fbLoadingMore,
+    hasNextPage: fbHasMore,
+    loadMore: fbLoadMore,
+  } = useInfiniteQuery<ServiceFeedback, { serviceFeedbacks: Connection<ServiceFeedback> }>(
+    GET_SERVICE_FEEDBACKS,
+    { first: 20 },
+    (data) => data.serviceFeedbacks,
+    { skip: serviceIds.length === 0 }
   );
-    const isPageLoading = svcLoading || (serviceIds.length > 0 && fbLoading);
+  const handleFbLoadMore = useCallback(() => fbLoadMore(), [fbLoadMore]);
+  const isPageLoading = svcLoading || (serviceIds.length > 0 && fbLoading);
 
-  const allFeedbacks = useMemo(() => {
-    const all = extractNodes(fbData?.serviceFeedbacks);
-    return all.filter((f) => serviceIds.includes(f.serviceId));
-  }, [fbData, serviceIds]);
+  const allFeedbacks = useMemo(
+    () => fbNodes.filter((f) => serviceIds.includes(f.serviceId)),
+    [fbNodes, serviceIds]
+  );
 
   if (!user) return null;
 
@@ -149,6 +160,9 @@ export default function OwnerFeedbacksPage() {
             </Card>
           );
         })}
+        {fbLoadingMore && [0, 1].map((n) => (
+          <Skeleton key={`fb-skel-${n}`} className="h-48 rounded-xl" />
+        ))}
       </div>
     );
   }
@@ -179,6 +193,7 @@ export default function OwnerFeedbacksPage() {
 
       {/* Feedback list */}
       {feedbackContent}
+      <InfiniteScrollTrigger onVisible={handleFbLoadMore} disabled={!fbHasMore || fbLoadingMore} />
     </div>
   );
 }

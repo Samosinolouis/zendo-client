@@ -1,8 +1,9 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useAuth } from "@/providers/AuthProvider";
-import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
+import { useQuery, useInfiniteQuery, useMutation, extractNodes } from "@/graphql/hooks";
+import { InfiniteScrollTrigger } from "@/components/ui/infinite-scroll";
 import { GET_SERVICES, GET_SERVICE_APPOINTMENTS, GET_USER } from "@/graphql/queries";
 import {
   APPROVE_SERVICE_APPOINTMENT,
@@ -393,15 +394,26 @@ export default function OwnerAppointmentsPage() {
 
   const serviceIds = useMemo(() => ownerServices.map((s) => s.id), [ownerServices]);
 
-  const { data: aptData, loading, refetch } = useQuery<{
-    serviceAppointments: Connection<ServiceAppointment>;
-  }>(
-    GET_SERVICE_APPOINTMENTS, { first: 500 }, { skip: serviceIds.length === 0 }
+  const {
+    nodes: aptNodes,
+    loading,
+    loadingMore: aptLoadingMore,
+    hasNextPage: aptHasMore,
+    loadMore: aptLoadMore,
+    refetch,
+  } = useInfiniteQuery<ServiceAppointment, { serviceAppointments: Connection<ServiceAppointment> }>(
+    GET_SERVICE_APPOINTMENTS,
+    { first: 30 },
+    (data) => data.serviceAppointments,
+    { skip: serviceIds.length === 0 }
   );
-  const allAppointments = useMemo(() => {
-    const all = extractNodes(aptData?.serviceAppointments);
-    return all.filter((a) => serviceIds.includes(a.serviceId));
-  }, [aptData, serviceIds]);
+
+  const handleLoadMore = useCallback(() => aptLoadMore(), [aptLoadMore]);
+
+  const allAppointments = useMemo(
+    () => aptNodes.filter((a) => serviceIds.includes(a.serviceId)),
+    [aptNodes, serviceIds]
+  );
 
   const isPageLoading = svcLoading || (serviceIds.length > 0 && loading);
 
@@ -433,6 +445,7 @@ export default function OwnerAppointmentsPage() {
     }
 
     return (
+      <>
       <Card className="border-0 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
@@ -474,10 +487,23 @@ export default function OwnerAppointmentsPage() {
                   </TableRow>
                 );
               })}
+
+              {/* Skeleton rows while loading more */}
+              {aptLoadingMore && (
+                Array.from({ length: 3 }).map((_, n) => (
+                  <TableRow key={`skel-${n}`}>
+                    {[0, 1, 2, 3, 4].map((c) => (
+                      <TableCell key={c}><Skeleton className="h-8 rounded" /></TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
       </Card>
+      <InfiniteScrollTrigger onVisible={handleLoadMore} disabled={!aptHasMore || aptLoadingMore} />
+      </>
     );
   }
 

@@ -1,11 +1,13 @@
 "use client";
 
+import { useCallback } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useAuth } from "@/providers/AuthProvider";
-import { useQuery, extractNodes } from "@/graphql/hooks";
+import { useInfiniteQuery } from "@/graphql/hooks";
 import { GET_NOTIFICATIONS } from "@/graphql/queries";
 import type { Notification, Connection } from "@/types";
+import { InfiniteScrollTrigger } from "@/components/ui/infinite-scroll";
 import { formatDateTime, formatCurrency } from "@/lib/utils";
 import {
   Bell, CalendarDays, CalendarCheck, CalendarX, CreditCard,
@@ -79,12 +81,20 @@ function isDelivered(n: Notification): boolean {
 export default function NotificationsPage() {
   const { user, isLoggedIn } = useAuth();
 
-  const { data, loading } = useQuery<{ notifications: Connection<Notification> }>(
+  const {
+    nodes: notifications,
+    loading,
+    loadingMore,
+    hasNextPage,
+    loadMore,
+  } = useInfiniteQuery<Notification, { notifications: Connection<Notification> }>(
     GET_NOTIFICATIONS,
-    { first: 100, filter: { userId: user?.id }, sort: { field: "CREATED_AT_DESC" } },
+    { first: 20, filter: { userId: user?.id }, sort: { field: "CREATED_AT_DESC" } },
+    (data) => data.notifications,
     { skip: !user }
   );
-  const notifications = extractNodes(data?.notifications);
+
+  const handleLoadMore = useCallback(() => loadMore(), [loadMore]);
 
   if (!isLoggedIn) {
     return (
@@ -275,6 +285,17 @@ export default function NotificationsPage() {
                 </Card>
               );
             })}
+
+            {/* Loading more skeleton */}
+            {loadingMore && (
+              <>
+                {[1, 2, 3].map((n) => (
+                  <Skeleton key={n} className="h-20 rounded-xl" />
+                ))}
+              </>
+            )}
+
+            <InfiniteScrollTrigger onVisible={handleLoadMore} disabled={!hasNextPage || loadingMore} />
           </div>
         )}
       </div>
