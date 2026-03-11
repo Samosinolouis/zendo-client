@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Service, ServicePage, Connection } from "@/types";
 import {
   Search, Plus, Eye, EyeOff, Save, Loader2, CheckCircle,
-  ChevronUp, ChevronDown, Trash2, Globe, FileText, BookOpen, Tag,
+  ChevronUp, ChevronDown, Trash2, Globe, FileText, BookOpen,
   Heading2, AlignLeft, Quote, Info,
   Image as ImageIcon, LayoutGrid, Video,
   Minus, List, ListOrdered, BarChart2, Zap, ClipboardList,
@@ -1081,7 +1081,6 @@ function ServicePageEditor({ service, onBack }: { service: ServiceWithBiz; onBac
   const [isDirty, setIsDirty]           = useState(false);
   const [previewMode, setPreviewMode]   = useState(false);
   const [showAddBlock, setShowAddBlock] = useState(false);
-  const [tagInput, setTagInput]         = useState("");
   const [saveStatus, setSaveStatus]     = useState<"saved" | "unsaved" | "saving">("saved");
 
   const payloadRef = useRef(payload);
@@ -1146,16 +1145,6 @@ function ServicePageEditor({ service, onBack }: { service: ServiceWithBiz; onBac
     update((p) => ({ ...p, content: [...p.content, newPageNode(type)] }));
     setShowAddBlock(false);
   }, [update]);
-  const addTag = useCallback(() => {
-    const t = tagInput.trim().toLowerCase().replaceAll(/\s+/g, "-");
-    if (!t || payload.tags.includes(t)) return;
-    update((p) => ({ ...p, tags: [...p.tags, t] }));
-    setTagInput("");
-  }, [tagInput, payload.tags, update]);
-  const removeTag = useCallback(
-    (tag: string) => update((p) => ({ ...p, tags: p.tags.filter((t) => t !== tag) })),
-    [update],
-  );
   const handleDeletePage = async () => {
     if (!globalThis.confirm("Delete this page? This cannot be undone.")) return;
     const result = await deletePage({ input: { serviceId: service.id } });
@@ -1224,11 +1213,6 @@ function ServicePageEditor({ service, onBack }: { service: ServiceWithBiz; onBac
           )}
           {payload.title && <h1 className="text-3xl font-bold text-foreground">{payload.title}</h1>}
           {payload.subtitle && <p className="text-lg text-muted-foreground">{payload.subtitle}</p>}
-          {payload.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {payload.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
-            </div>
-          )}
           {payload.content.length === 0 && (
             <p className="text-muted-foreground italic text-center py-8">
               No content blocks yet — Switch to Edit mode to add some.
@@ -1287,28 +1271,6 @@ function ServicePageEditor({ service, onBack }: { service: ServiceWithBiz; onBac
                 <Plus className="w-3.5 h-3.5" /> Add Block
               </Button>
               {showAddBlock && <BlockPicker onAdd={addNode} onClose={() => setShowAddBlock(false)} />}
-            </div>
-          </section>
-
-          {/* Tags */}
-          <section>
-            <span className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Tags</span>
-            <div className="flex flex-wrap gap-1.5 mb-2 min-h-6">
-              {payload.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="gap-1 pr-1">
-                  <Tag className="w-3 h-3" />{tag}
-                  <button onClick={() => removeTag(tag)}
-                    className="ml-0.5 hover:text-destructive rounded-full" aria-label={`Remove tag ${tag}`}>
-                    ×
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-                placeholder="Add a tag and press Enter…" className="flex-1" />
-              <Button size="sm" variant="outline" onClick={addTag}>Add</Button>
             </div>
           </section>
 

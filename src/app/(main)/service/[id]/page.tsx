@@ -424,7 +424,6 @@ export default function ServiceDetailPage({
   const blogNodes    = blogPayload.content;
   const blogTitle    = blogPayload.title;
   const blogSubtitle = blogPayload.subtitle;
-  const blogTags     = blogPayload.tags;
   const blogBanner   = blogPayload.bannerImageUrl;
 
   const hasInlineForm = blogNodes.some((n) => n.type === "serviceForm");
@@ -661,7 +660,7 @@ export default function ServiceDetailPage({
               </TabsList>
 
               <TabsContent value="about" className="space-y-6">
-                {(blogTitle || blogSubtitle || blogBanner || blogTags.length > 0) && (
+                {(blogTitle || blogSubtitle || blogBanner || (service.tags ?? []).length > 0) && (
                   <Card>
                     <CardContent className="p-6 space-y-3">
                       {blogBanner && (
@@ -670,9 +669,9 @@ export default function ServiceDetailPage({
                       )}
                       {blogTitle && <h2 className="text-2xl font-bold text-foreground">{blogTitle}</h2>}
                       {blogSubtitle && <p className="text-muted-foreground">{blogSubtitle}</p>}
-                      {blogTags.length > 0 && (
+                      {(service.tags ?? []).length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
-                          {blogTags.map((tag) => (
+                          {(service.tags ?? []).map((tag) => (
                             <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
                               {tag}
                             </span>
