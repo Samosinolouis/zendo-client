@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useQuery, useInfiniteQuery, extractNodes } from "@/graphql/hooks";
 import { GET_BUSINESSES, GET_SERVICES } from "@/graphql/queries";
 import type { Business, Service, Connection } from "@/types";
 import {
-  Search, ArrowRight, X, Sparkles, Compass, Star, Zap,
+  Search, ArrowRight, X, Compass, Star, Zap,
   TrendingUp, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,9 +19,19 @@ import { InfiniteScrollTrigger } from "@/components/ui/infinite-scroll";
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [scrollY, setScrollY] = useState(0);
   const heroRef = useRef<HTMLDivElement>(null);
+
+  const addTag = useCallback((tag: string) => {
+    const t = tag.trim().toLowerCase();
+    if (t && !selectedTags.includes(t)) setSelectedTags((prev) => [...prev, t]);
+  }, [selectedTags]);
+
+  const removeTag = useCallback((tag: string) => {
+    setSelectedTags((prev) => prev.filter((t) => t !== tag));
+  }, []);
 
   // Debounce search
   useEffect(() => {
@@ -50,26 +60,17 @@ export default function ExplorePage() {
     loadMore: svcLoadMore,
   } = useInfiniteQuery<Service, { services: Connection<Service> }>(
     GET_SERVICES,
-    { first: 18, search: debouncedSearch || undefined },
+    {
+      first: 18,
+      search: debouncedSearch || undefined,
+      filter: selectedTags.length > 0 ? { tags: selectedTags } : undefined,
+    },
     (data) => data.services,
   );
 
   const handleLoadMore = useCallback(() => svcLoadMore(), [svcLoadMore]);
 
-  // Derive unique tags from loaded services
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    for (const svc of allServices) {
-      for (const tag of svc.tags ?? []) tagSet.add(tag);
-    }
-    return [...tagSet].sort((a, b) => a.localeCompare(b));
-  }, [allServices]);
-
-  // Filter services client-side when a tag is selected
-  const services = useMemo(
-    () => (selectedTag ? allServices.filter((s) => (s.tags ?? []).includes(selectedTag)) : allServices),
-    [allServices, selectedTag],
-  );
+  const services = allServices;
 
   const getBusinessName = (businessId: string) =>
     businesses.find(b => b.id === businessId)?.name ?? "Business";
@@ -154,28 +155,47 @@ className="relative bg-hero min-h-110 flex flex-col items-center justify-center 
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-4 pb-20">
-        {/* Category pills */}
-        <div className="flex flex-wrap gap-2 mb-10 animate-fade-in">
-          <Button
-            variant={!selectedTag ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSelectedTag(null)}
-              className={`rounded-full ${!selectedTag ? "shadow-lg shadow-primary/30 scale-105" : ""}`}
-          >
-            <Sparkles className="w-3.5 h-3.5 mr-1.5" /> All Services
-          </Button>
-          {allTags.map((tag, i) => (
-            <Button
-              key={tag}
-              variant={selectedTag === tag ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
-              style={{ animationDelay: `${i * 0.04}s` }}
-              className={`rounded-full animate-scale-in ${selectedTag === tag ? "shadow-lg shadow-primary/30 scale-105" : ""}`}
-            >
-              {tag}
-            </Button>
-          ))}
+        {/* Tag filter */}
+        <div className="mb-10 animate-fade-in">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
+                  e.preventDefault();
+                  addTag(tagInput);
+                  setTagInput("");
+                }
+              }}
+              placeholder="Filter by tag and press Enter…"
+              className="pl-9 pr-4 rounded-xl"
+            />
+          </div>
+          {selectedTags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {selectedTags.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="default"
+                  className="rounded-full pl-3 pr-2 py-1 gap-1.5 cursor-pointer shadow-sm shadow-primary/20"
+                  onClick={() => removeTag(tag)}
+                >
+                  {tag}
+                  <X className="w-3 h-3" />
+                </Badge>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedTags([])}
+                className="rounded-full h-6 px-2 text-xs text-muted-foreground"
+              >
+                Clear all
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Featured businesses */}
@@ -250,7 +270,7 @@ className="relative bg-hero min-h-110 flex flex-col items-center justify-center 
             <h3 className="text-xl font-bold text-foreground mb-2">No services found</h3>
             <p className="text-muted-foreground mb-5">Try adjusting your search or browse all categories.</p>
             <Button
-              onClick={() => { setSearchQuery(""); setSelectedTag(null); }}
+              onClick={() => { setSearchQuery(""); setSelectedTags([]); }}
               className="shadow-lg shadow-primary/30"
             >
               Clear search
@@ -293,7 +313,7 @@ className="relative bg-hero min-h-110 flex flex-col items-center justify-center 
                                 key={tag}
                                 variant="secondary"
                                 className="text-xs py-0 px-1.5 cursor-pointer"
-                                onClick={(e) => { e.preventDefault(); setSelectedTag(tag); }}
+                                onClick={(e) => { e.preventDefault(); addTag(tag); }}
                               >
                                 {tag}
                               </Badge>
