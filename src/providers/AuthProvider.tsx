@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { SessionProvider, useSession, signIn, signOut } from "next-auth/react";
 import type { AppUser } from "@/types/next-auth";
 import { graphqlClient } from "@/lib/graphql-client";
@@ -67,8 +67,8 @@ const AuthContext = createContext<AuthContextType>({
 /*  Inner provider — consumes the NextAuth session                     */
 /* ------------------------------------------------------------------ */
 
-function AuthProviderInner({ children }: { children: React.ReactNode }) {
-  const { data: session, status, update: updateSession } = useSession();
+function AuthProviderInner({ children }: Readonly<{ children: React.ReactNode }>) {
+  const { data: session, status } = useSession();
 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -108,7 +108,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
             suffix: fetched.suffix ?? undefined,
             mobileNumber: fetched.mobileNumber ?? undefined,
             isBusinessOwner: fetched.isBusinessOwner ?? undefined,
-            email: prev?.email ?? "",
+            email: fetched.email ?? "",
             profilePictureUrl: fetched.profilePictureUrl ?? undefined,
             bannerImageUrl: fetched.bannerImageUrl ?? undefined,
           };
@@ -125,7 +125,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
           };
         });
       }
-    } catch (err) {
+    } catch {
       // ignore - keep existing user state
     }
   }, []);
@@ -190,23 +190,25 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     }
   }, [status]);
 
+  const contextValue = useMemo(() => ({
+    user,
+    appUser,
+    isLoggedIn,
+    isOwner,
+    isAdmin,
+    businesses,
+    login,
+    logout,
+    accessToken: (session?.accessToken as string) ?? null,
+    status,
+    error: (session?.error as string) ?? null,
+    refreshBusinesses: () => { void fetchBusinesses(); },
+    refreshUser: () => { if (user?.id) void fetchUserFromAPI(user.id); },
+  }), [user, appUser, isLoggedIn, isOwner, isAdmin, businesses, login, logout, session, status, fetchBusinesses, fetchUserFromAPI]);
+
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        appUser,
-        isLoggedIn,
-        isOwner,
-        isAdmin,
-        businesses,
-        login,
-        logout,
-        accessToken: (session?.accessToken as string) ?? null,
-        status,
-        error: (session?.error as string) ?? null,
-        refreshBusinesses: fetchBusinesses,
-        refreshUser: () => user?.id && fetchUserFromAPI(user.id),
-      }}
+      value={contextValue}
     >
       {children}
     </AuthContext.Provider>
@@ -217,7 +219,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
 /*  Exported wrapper — includes SessionProvider                        */
 /* ------------------------------------------------------------------ */
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <SessionProvider>
       <AuthProviderInner>{children}</AuthProviderInner>

@@ -62,11 +62,11 @@ export async function graphqlClient<T = unknown>(
         return {
           errors: [
             {
-              message: json && (json as any).errors ? 'GraphQL errors' : res.statusText || 'HTTP error',
+              message: json?.errors ? 'GraphQL errors' : res.statusText || 'HTTP error',
               extensions: {
                 type: 'http',
                 status: res.status,
-                details: json,
+                details: json as Record<string, unknown>,
               },
             },
           ],
@@ -74,7 +74,7 @@ export async function graphqlClient<T = unknown>(
       }
 
       return json;
-    } catch (err) {
+    } catch {
       return {
         errors: [
           {
