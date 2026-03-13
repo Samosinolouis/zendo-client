@@ -52,10 +52,13 @@ function FormFieldInput({
 }) {
   if (isOptionsField(field)) {
     if (field.type === "select") {
+      const selectedLabel = field.options.find((o) => o.value === value)?.label;
       return (
         <Select value={value || ""} onValueChange={onChange}>
-          <SelectTrigger>
-            <SelectValue placeholder={field.placeholder ?? "Select..."} />
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={field.placeholder ?? "Select..."} >
+              {value ? (selectedLabel ?? value) : undefined}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {field.options.map((opt) => (
@@ -304,10 +307,13 @@ function BookingFormSteps({
             {Object.entries(formValues).map(([fieldName, val]) => {
               const field = fields.find((f) => f.name === fieldName);
               if (!val || !field) return null;
+              const displayVal = isOptionsField(field)
+                ? (field.options.find((o) => o.value === val)?.label ?? val)
+                : val;
               return (
                 <div key={fieldName} className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{field.label}</span>
-                  <span className="text-foreground">{val}</span>
+                  <span className="text-foreground">{displayVal}</span>
                 </div>
               );
             })}
