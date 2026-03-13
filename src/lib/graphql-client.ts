@@ -5,9 +5,7 @@
 // ============================================================
 
 import { getSession } from "next-auth/react";
-
-const GRAPHQL_ENDPOINT =
-  process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT ?? "http://localhost:4000/graphql";
+import { GRAPHQL_ENDPOINT } from "@/lib/config";
 
 export interface GraphQLError {
   message: string;

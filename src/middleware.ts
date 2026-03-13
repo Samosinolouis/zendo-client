@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { NEXTAUTH_SECRET } from "@/lib/config";
 
 /**
  * Enforce onboarding completion.
@@ -28,7 +29,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const token = await getToken({ req, secret: NEXTAUTH_SECRET });
 
   // Not authenticated — nothing to enforce, let the page handle it.
   if (!token) {

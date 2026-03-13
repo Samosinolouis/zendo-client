@@ -1,9 +1,7 @@
 import NextAuth from "next-auth";
 import KeycloakProvider from "next-auth/providers/keycloak";
 import type { AppUser } from "@/types/next-auth";
-
-const GRAPHQL_ENDPOINT =
-  process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT ?? "http://localhost:4000/graphql";
+import { GRAPHQL_ENDPOINT, KEYCLOAK_CLIENT_ID, KEYCLOAK_ISSUER } from "@/lib/config";
 
 /** Decode a JWT payload without verifying the signature (claims only). */
 function decodeJwtPayload(jwt: string): Record<string, unknown> {
@@ -61,7 +59,7 @@ async function fetchAppUser(
 
 async function refreshAccessToken(token: any) {
   try {
-    const url = `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/token`;
+    const url = `${KEYCLOAK_ISSUER}/protocol/openid-connect/token`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -69,7 +67,7 @@ async function refreshAccessToken(token: any) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
-        client_id: process.env.KEYCLOAK_CLIENT_ID!,
+        client_id: KEYCLOAK_CLIENT_ID,
         grant_type: "refresh_token",
         refresh_token: token.refreshToken,
       }),
@@ -112,9 +110,9 @@ async function refreshAccessToken(token: any) {
 const handler = NextAuth({
   providers: [
     KeycloakProvider({
-      clientId: process.env.KEYCLOAK_CLIENT_ID!,
+      clientId: KEYCLOAK_CLIENT_ID,
       clientSecret: "",  // Public client — no secret
-      issuer: process.env.KEYCLOAK_ISSUER!,
+      issuer: KEYCLOAK_ISSUER,
       authorization: {
         params: {
           scope: "openid profile email",
@@ -188,7 +186,7 @@ const handler = NextAuth({
       // Perform Keycloak logout so the Keycloak session is also terminated
       if (token.idToken) {
         const logoutUrl = new URL(
-          `${process.env.KEYCLOAK_ISSUER}/protocol/openid-connect/logout`
+          `${KEYCLOAK_ISSUER}/protocol/openid-connect/logout`
         );
         logoutUrl.searchParams.set("id_token_hint", token.idToken as string);
         try {
