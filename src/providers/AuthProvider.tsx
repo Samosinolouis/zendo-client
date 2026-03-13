@@ -1,9 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { SessionProvider, useSession, signIn, signOut } from "next-auth/react";
 import type { AppUser } from "@/types/next-auth";
-import { graphqlClient } from "@/lib/graphql-client";
+import { graphqlClient, setAccessToken } from "@/lib/graphql-client";
 import { GET_BUSINESSES, GET_USER } from "@/graphql/queries";
 
 /* ------------------------------------------------------------------ */
@@ -131,6 +131,18 @@ function AuthProviderInner({ children }: Readonly<{ children: React.ReactNode }>
     }
   }, []);
 
+  // Keep the graphqlClient token cache in sync without calling getSession().
+  // This MUST happen before any GraphQL calls are made, so it runs on every
+  // accessToken change rather than being batched into the user-setup effect.
+  useEffect(() => {
+    setAccessToken((session?.accessToken as string) ?? null);
+  }, [session?.accessToken]);
+
+  // Track the last user ID for which we fetched user data to avoid
+  // re-fetching on every session object reference change (which would
+  // re-trigger the cross-tab broadcast loop via graphqlClient → getSession).
+  const lastFetchedUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
       const nameParts = (session.user.name ?? "").split(" ");
@@ -144,12 +156,15 @@ function AuthProviderInner({ children }: Readonly<{ children: React.ReactNode }>
         profilePictureUrl: appUser?.profilePictureUrl ?? session.user.image ?? undefined,
       });
 
-      // Always fetch the fresh user record from the API to ensure
-      // fields like `profilePictureUrl` (Cloudinary URLs) are up-to-date.
-      if (session.user.id) {
-        fetchUserFromAPI(session.user.id);
+      // Only fetch the fresh user record when the user ID changes (i.e. on
+      // sign-in or account switch), not on every session object re-creation.
+      const userId = session.user.id ?? null;
+      if (userId && userId !== lastFetchedUserIdRef.current) {
+        lastFetchedUserIdRef.current = userId;
+        fetchUserFromAPI(userId);
       }
     } else if (status === "unauthenticated") {
+      lastFetchedUserIdRef.current = null;
       setUser(null);
       setBusinesses([]);
     }
@@ -160,7 +175,7 @@ function AuthProviderInner({ children }: Readonly<{ children: React.ReactNode }>
       signOut({ callbackUrl: "/" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, session, appUser, fetchUserFromAPI]);
+  }, [status, session?.user?.id, session?.user?.email, appUser?.firstName, appUser?.lastName, appUser?.profilePictureUrl, fetchUserFromAPI]);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -222,7 +237,10 @@ function AuthProviderInner({ children }: Readonly<{ children: React.ReactNode }>
 
 export function AuthProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <SessionProvider>
+    // refetchOnWindowFocus=false prevents a session re-fetch (and its storage
+    // broadcast) every time the user switches browser tabs, which was the
+    // second trigger of the cross-tab infinite re-auth loop.
+    <SessionProvider refetchOnWindowFocus={false}>
       <AuthProviderInner>{children}</AuthProviderInner>
     </SessionProvider>
   );

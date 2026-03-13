@@ -4,7 +4,6 @@
 // token from the NextAuth session.
 // ============================================================
 
-import { getSession } from "next-auth/react";
 import { GRAPHQL_ENDPOINT } from "@/lib/config";
 
 export interface GraphQLError {
@@ -23,6 +22,18 @@ export interface GraphQLResponse<T = unknown> {
 }
 
 /**
+ * Module-level token cache updated by AuthProvider.
+ * Using a cached token avoids calling getSession() on every request,
+ * which would broadcast a storage event to all other tabs and cause
+ * an infinite cross-tab re-authentication loop.
+ */
+let _cachedAccessToken: string | null = null;
+
+export function setAccessToken(token: string | null): void {
+  _cachedAccessToken = token;
+}
+
+/**
  * Execute a GraphQL operation against the API.
  *
  * Automatically attaches the current Keycloak access token as a
@@ -32,8 +43,7 @@ export async function graphqlClient<T = unknown>(
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<GraphQLResponse<T>> {
-  const session = await getSession();
-  const token = session?.accessToken;
+  const token = _cachedAccessToken;
 
   const headers: HeadersInit = {
     "Content-Type": "application/json",
