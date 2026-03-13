@@ -52,13 +52,10 @@ function FormFieldInput({
 }) {
   if (isOptionsField(field)) {
     if (field.type === "select") {
-      const selectedLabel = field.options.find((o) => o.value === value)?.label;
       return (
         <Select value={value || ""} onValueChange={onChange}>
           <SelectTrigger className="w-full">
-            <SelectValue placeholder={field.placeholder ?? "Select..."} >
-              {value ? (selectedLabel ?? value) : undefined}
-            </SelectValue>
+            <SelectValue placeholder={field.placeholder ?? "Select..."} />
           </SelectTrigger>
           <SelectContent>
             {field.options.map((opt) => (
