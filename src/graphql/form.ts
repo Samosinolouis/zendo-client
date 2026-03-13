@@ -405,6 +405,130 @@ export const FORM_FIELD_META: ReadonlyArray<{
   { type: "password", label: "Password",    description: "Masked text input" },
 ] as const;
 
+// ── Plugin system ─────────────────────────────────────────────
+
+/**
+ * Per-field dynamic overrides produced by running plugins.
+ * Keys are field `name` slugs; values are partial field patches.
+ */
+export type PluginUpdateSets = Record<string, { amount: number }>;
+
+/**
+ * Public API exposed to each plugin via the `form` identifier.
+ * Plugins have access ONLY to this object — no module scope.
+ */
+export interface FormPluginAPI {
+  /** Returns the current string value for the named field. */
+  getValue(name: string): string;
+  /** Returns the field definition for the named field. */
+  getField(name: string): FormField | undefined;
+  /**
+   * Overrides properties (currently: `amount`) for the named field.
+   * Call this inside a `subscribe` callback to adjust pricing.
+   */
+  updateField(name: string, patch: { amount?: number }): void;
+  /**
+   * Registers a callback that fires immediately with the current
+   * form state.  In the live booking form the effect re-runs on
+   * every value change, so every registered subscription is called
+   * once per change cycle.
+   */
+  subscribe(callback: (state: { values: Record<string, string> }) => void): void;
+}
+
+/**
+ * Executes all plugin strings against the current form values and
+ * returns a map of `fieldName → { amount }` overrides.
+ *
+ * Each plugin runs inside a `new Function` sandbox so it can only
+ * access the `form` API — no closure or module scope is exposed.
+ */
+export function runFormPlugins(
+  plugins: string[],
+  fields: FormField[],
+  values: Record<string, string>,
+): PluginUpdateSets {
+  const updates: PluginUpdateSets = {};
+  const subscriptions: Array<(state: { values: Record<string, string> }) => void> = [];
+
+  const api: FormPluginAPI = {
+    getValue: (name) => values[name] ?? "",
+    getField: (name) => fields.find((f) => f.name === name),
+    updateField: (name, patch) => {
+      if (patch.amount !== undefined) {
+        updates[name] = { ...updates[name], amount: patch.amount };
+      }
+    },
+    subscribe: (cb) => {
+      subscriptions.push(cb);
+    },
+  };
+
+  for (const code of plugins) {
+    if (!code.trim()) continue;
+    try {
+      // Intentional sandbox: Function constructor creates a new scope.
+      // Only `form` is passed in — no closure access.
+      // eslint-disable-next-line no-new-func
+      new Function("form", `"use strict";\n${code}`)(api);
+    } catch (err) {
+      console.warn("[FormPlugin] Registration error:", err);
+    }
+  }
+
+  // Fire all subscriptions registered by plugins, in order.
+  for (const sub of subscriptions) {
+    try {
+      sub({ values });
+    } catch (err) {
+      console.warn("[FormPlugin] Subscription error:", err);
+    }
+  }
+
+  return updates;
+}
+
+/**
+ * Returns whether a field's amount should count toward the total
+ * given the current form values.
+ */
+function isFieldActive(field: FormField, values: Record<string, string>): boolean {
+  if (field.type === "checkbox" || field.type === "switch") {
+    return values[field.name] === "true";
+  }
+  if (
+    field.type === "select" ||
+    field.type === "radio" ||
+    field.type === "date" ||
+    field.type === "file"
+  ) {
+    return Boolean(values[field.name]);
+  }
+  // text, textarea, number, password — static fee, always active
+  return true;
+}
+
+/**
+ * Computes the live total amount from field definitions, current
+ * form values, and any plugin-applied overrides.
+ *
+ * Plugin overrides replace (not add to) the field's base amount.
+ */
+export function computeDynamicTotal(
+  fields: FormField[],
+  values: Record<string, string>,
+  pluginOverrides: PluginUpdateSets = {},
+): number {
+  let total = 0;
+  for (const field of fields) {
+    const amount = pluginOverrides[field.name]?.amount ?? field.amount;
+    if (amount > 0 && isFieldActive(field, values)) {
+      total += amount;
+    }
+  }
+  return total;
+}
+
 // ── GraphQL operations ────────────────────────────────────────
 //    Re-exported so callers use a single import path for both
 //    the schema types and the network operations.

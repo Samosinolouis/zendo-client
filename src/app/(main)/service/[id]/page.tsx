@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthProvider";
 import { useQuery, useMutation, extractNodes } from "@/graphql/hooks";
@@ -22,8 +22,8 @@ import {
   AlertCircle, BookOpen, MessageCircle, Loader2, Clock,
 } from "lucide-react";
 import { parsePagePayload, type PageNode } from "@/graphql/page-nodes";
-import { parseFormPayload, isOptionsField, isBooleanField } from "@/graphql/form";
-import type { FormField } from "@/graphql/form";
+import { parseFormPayload, isOptionsField, isBooleanField, runFormPlugins, computeDynamicTotal } from "@/graphql/form";
+import type { FormField, PluginUpdateSets } from "@/graphql/form";
 import { NodePreview } from "@/app/(main)/owner/pages/page";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -408,8 +408,11 @@ export default function ServiceDetailPage({
   const { data: formData, loading: formLoading } = useQuery<{ serviceFormByService: ServiceForm | null }>(
     GET_SERVICE_FORM, { serviceId: id }
   );
-  const parsedForm = parseFormPayload(
-    formData?.serviceFormByService?.payload as Record<string, unknown> | null
+  const parsedForm = useMemo(
+    () => parseFormPayload(
+      formData?.serviceFormByService?.payload as Record<string, unknown> | null
+    ),
+    [formData],
   );
   const fields = parsedForm.fields;
   const formCurrency = parsedForm.currency;
@@ -447,11 +450,18 @@ export default function ServiceDetailPage({
   }>(CREATE_PAYMENT_LINK, { throwOnError: true });
 
   const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [pluginOverrides, setPluginOverrides] = useState<PluginUpdateSets>({});
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [bookingStep, setBookingStep] = useState<BookingStep>("details");
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const [descExpanded, setDescExpanded] = useState(false);
+
+  // Re-run plugins and recompute overrides whenever user inputs change.
+  useEffect(() => {
+    const overrides = runFormPlugins(parsedForm.plugins, parsedForm.fields, formValues);
+    setPluginOverrides(overrides);
+  }, [formValues, parsedForm]);
 
   const isPageLoading =
     svcLoading ||
@@ -489,7 +499,8 @@ export default function ServiceDetailPage({
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
   };
 
-  const computeAmount = (): number => parsedForm.totalAmount;
+  const computeAmount = (): number =>
+    computeDynamicTotal(parsedForm.fields, formValues, pluginOverrides);
 
   const handleConfirmBooking = async () => {
     setPaymentError(null);
@@ -505,7 +516,7 @@ export default function ServiceDetailPage({
           value: isBooleanField(f)
             ? formValues[f.name] === "true"
             : (formValues[f.name] ?? ""),
-          amount: f.amount,
+          amount: pluginOverrides[f.name]?.amount ?? f.amount,
         })),
         meta: {
           submittedAt: new Date().toISOString(),
