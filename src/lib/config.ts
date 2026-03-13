@@ -25,8 +25,8 @@ export const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET ?? "";
 // Logs all config values except secrets, to verify they're loading correctly.
 console.log("Config:");
 console.log("GRAPHQL_ENDPOINT:", GRAPHQL_ENDPOINT);
-console.log("CLOUDINARY_CLOUD_NAME:", CLOUDINARY_CLOUD_NAME ? "[redacted]" : "(not set)");
-console.log("CLOUDINARY_UPLOAD_PRESET:", CLOUDINARY_UPLOAD_PRESET ? "[redacted]" : "(not set)");
-console.log("KEYCLOAK_CLIENT_ID:", KEYCLOAK_CLIENT_ID ? "[redacted]" : "(not set)");
-console.log("KEYCLOAK_ISSUER:", KEYCLOAK_ISSUER ? "[redacted]" : "(not set)");
-console.log("NEXTAUTH_SECRET:", NEXTAUTH_SECRET ? "[redacted]" : "(not set)");
+console.log("CLOUDINARY_CLOUD_NAME:", CLOUDINARY_CLOUD_NAME ? "[hidden]" : "(not set)");
+console.log("CLOUDINARY_UPLOAD_PRESET:", CLOUDINARY_UPLOAD_PRESET ? "[hidden]" : "(not set)");
+console.log("KEYCLOAK_CLIENT_ID:", KEYCLOAK_CLIENT_ID ? "[hidden]" : "(not set)");
+console.log("KEYCLOAK_ISSUER:", KEYCLOAK_ISSUER ? "[hidden]" : "(not set)");
+console.log("NEXTAUTH_SECRET:", NEXTAUTH_SECRET ? "[hidden]" : "(not set)");

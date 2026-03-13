@@ -125,8 +125,9 @@ function AuthProviderInner({ children }: Readonly<{ children: React.ReactNode }>
           };
         });
       }
-    } catch {
+    } catch (err) {
       // ignore - keep existing user state
+      console.error("Failed to fetch user from API", err);
     }
   }, []);
 
